@@ -1,0 +1,42 @@
+timezone: Asia/Shanghai
+sources:
+  - id: amazon-global-selling-cn
+    name: Amazon 全球开店中国
+    enabled: true
+    source_class: official
+    discovery: {type: amazon-global-selling-cn, url: https://gs.amazon.cn/news, max_items: 20}
+    category_hints: [amazon-policy]
+    fetch: {interval_minutes: 240, requests_per_minute: 6, timeout_seconds: 20, max_retries: 2}
+    content: {language: zh, timezone: Asia/Shanghai}
+  - id: about-amazon
+    name: About Amazon
+    enabled: true
+    source_class: official
+    discovery: {type: rss, url: https://www.aboutamazon.com/rss/feed.rss, max_items: 20}
+    category_hints: [amazon-policy]
+    fetch: {interval_minutes: 120, requests_per_minute: 10, timeout_seconds: 20, max_retries: 2}
+    content: {language: en, timezone: UTC}
+  - id: amazon-science
+    name: Amazon Science
+    enabled: true
+    source_class: official
+    discovery: {type: rss, url: https://www.amazon.science/index.rss, max_items: 20}
+    category_hints: [ai-ops-tools]
+    fetch: {interval_minutes: 240, requests_per_minute: 6, timeout_seconds: 20, max_retries: 2}
+    content: {language: en, timezone: UTC}
+  - id: amz123-zb
+    name: AMZ123 跨境早报
+    enabled: true
+    source_class: professional-media
+    discovery: {type: amz123-zb, url: https://www.amz123.com/zb, max_items: 20}
+    category_hints: [amazon-policy]
+    fetch: {interval_minutes: 240, requests_per_minute: 4, timeout_seconds: 20, max_retries: 2}
+    content: {language: zh, timezone: Asia/Shanghai}
+  - id: amazon-ads-whats-new
+    name: Amazon Ads What's New
+    enabled: true
+    source_class: official
+    discovery: {type: amazon-ads-whats-new, url: https://advertising.amazon.com/zh-cn/resources/whats-new, max_items: 20}
+    category_hints: [ads-traffic]
+    fetch: {interval_minutes: 120, requests_per_minute: 10, timeout_seconds: 20, max_retries: 2}
+    content: {language: en, timezone: UTC}

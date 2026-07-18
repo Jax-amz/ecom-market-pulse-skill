@@ -1,0 +1,435 @@
+{
+  "$defs": {
+    "ArticleAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "whatHappened": {
+          "minLength": 1,
+          "title": "Whathappened",
+          "type": "string"
+        },
+        "whyImportant": {
+          "minLength": 1,
+          "title": "Whyimportant",
+          "type": "string"
+        },
+        "suggestions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 0,
+          "title": "Suggestions",
+          "type": "array"
+        },
+        "effectiveAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Effectiveat"
+        },
+        "deadlineAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Deadlineat"
+        }
+      },
+      "required": [
+        "whatHappened",
+        "whyImportant",
+        "suggestions",
+        "effectiveAt",
+        "deadlineAt"
+      ],
+      "title": "ArticleAnalysis",
+      "type": "object"
+    },
+    "Conflict": {
+      "additionalProperties": false,
+      "description": "同事件不同来源的冲突，不把未经解决的冲突伪装成事实。",
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "sourceUrls": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Sourceurls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "description",
+        "sourceUrls"
+      ],
+      "title": "Conflict",
+      "type": "object"
+    },
+    "CorroboratingSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceReference"
+        },
+        "sourceUrl": {
+          "minLength": 1,
+          "title": "Sourceurl",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "sourceUrl"
+      ],
+      "title": "CorroboratingSource",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "fact": {
+          "minLength": 1,
+          "title": "Fact",
+          "type": "string"
+        },
+        "sourceUrl": {
+          "minLength": 1,
+          "title": "Sourceurl",
+          "type": "string"
+        },
+        "location": {
+          "minLength": 1,
+          "title": "Location",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fact",
+        "sourceUrl",
+        "location"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "ImpactDimension": {
+      "description": "资讯对卖家经营的影响面，相关文章必须选择一至三个。",
+      "enum": [
+        "money",
+        "goods",
+        "account",
+        "traffic",
+        "efficiency",
+        "competition"
+      ],
+      "title": "ImpactDimension",
+      "type": "string"
+    },
+    "AgentProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "executor": {
+          "minLength": 1,
+          "title": "Executor",
+          "type": "string"
+        },
+        "taskVersion": {
+          "minLength": 1,
+          "title": "Taskversion",
+          "type": "string"
+        },
+        "analyzedAt": {
+          "format": "date-time",
+          "title": "Analyzedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executor",
+        "taskVersion",
+        "analyzedAt"
+      ],
+      "title": "AgentProvenance",
+      "type": "object"
+    },
+    "PrimaryCategory": {
+      "description": "卖家需要作出的主要经营决策分类，枚举值不得随意扩展。",
+      "enum": [
+        "amazon-policy",
+        "amazon-fba-fulfillment",
+        "fee-margin-tax",
+        "ads-traffic",
+        "listing-seo-voc",
+        "account-compliance-ip",
+        "crossborder-logistics",
+        "competitor-marketplaces",
+        "ai-ops-tools",
+        "seller-community-signal"
+      ],
+      "title": "PrimaryCategory",
+      "type": "string"
+    },
+    "SourceClass": {
+      "enum": [
+        "official",
+        "professional-media",
+        "community",
+        "aggregator"
+      ],
+      "title": "SourceClass",
+      "type": "string"
+    },
+    "SourceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sourceClass": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "sourceType": {
+          "$ref": "#/$defs/SourceType"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "sourceClass",
+        "sourceType"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    },
+    "SourceType": {
+      "enum": [
+        "rss",
+        "html",
+        "sitemap",
+        "amz123-zb",
+        "amazon-global-selling-cn",
+        "amazon-ads-whats-new"
+      ],
+      "title": "SourceType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "单篇文章的权威业务 JSON 合同。",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "clusterId": {
+      "minLength": 1,
+      "title": "Clusterid",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "originalTitle": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Originaltitle"
+    },
+    "summary": {
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "sourceUrl": {
+      "minLength": 1,
+      "title": "Sourceurl",
+      "type": "string"
+    },
+    "canonicalUrl": {
+      "minLength": 1,
+      "title": "Canonicalurl",
+      "type": "string"
+    },
+    "permalink": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Permalink"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceReference"
+    },
+    "publishedAt": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Publishedat"
+    },
+    "collectedAt": {
+      "format": "date-time",
+      "title": "Collectedat",
+      "type": "string"
+    },
+    "language": {
+      "maxLength": 35,
+      "minLength": 2,
+      "title": "Language",
+      "type": "string"
+    },
+    "relevant": {
+      "title": "Relevant",
+      "type": "boolean"
+    },
+    "exclusionReason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Exclusionreason"
+    },
+    "primaryCategory": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PrimaryCategory"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "impactDimensions": {
+      "items": {
+        "$ref": "#/$defs/ImpactDimension"
+      },
+      "maxItems": 3,
+      "title": "Impactdimensions",
+      "type": "array"
+    },
+    "affectedMarketplaces": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Affectedmarketplaces",
+      "type": "array"
+    },
+    "affectedSellerTypes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Affectedsellertypes",
+      "type": "array"
+    },
+    "analysis": {
+      "$ref": "#/$defs/ArticleAnalysis"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "corroboratingSources": {
+      "items": {
+        "$ref": "#/$defs/CorroboratingSource"
+      },
+      "title": "Corroboratingsources",
+      "type": "array"
+    },
+    "conflicts": {
+      "items": {
+        "$ref": "#/$defs/Conflict"
+      },
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "agent": {
+      "$ref": "#/$defs/AgentProvenance"
+    },
+    "contentHash": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Contenthash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "clusterId",
+    "title",
+    "originalTitle",
+    "summary",
+    "sourceUrl",
+    "canonicalUrl",
+    "permalink",
+    "source",
+    "publishedAt",
+    "collectedAt",
+    "language",
+    "relevant",
+    "exclusionReason",
+    "primaryCategory",
+    "impactDimensions",
+    "affectedMarketplaces",
+    "affectedSellerTypes",
+    "analysis",
+    "evidence",
+    "corroboratingSources",
+    "conflicts",
+    "agent",
+    "contentHash"
+  ],
+  "title": "Article",
+  "type": "object"
+}

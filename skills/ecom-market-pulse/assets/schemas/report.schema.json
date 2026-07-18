@@ -1,0 +1,1103 @@
+{
+  "$defs": {
+    "BuildMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "runId": {
+          "minLength": 1,
+          "title": "Runid",
+          "type": "string"
+        },
+        "promptVersion": {
+          "minLength": 1,
+          "title": "Promptversion",
+          "type": "string"
+        },
+        "gatePromptVersion": {
+          "minLength": 1,
+          "title": "Gatepromptversion",
+          "type": "string"
+        },
+        "reportPromptVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reportpromptversion"
+        },
+        "taxonomyVersion": {
+          "const": "1.0.0",
+          "title": "Taxonomyversion",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": "1.0.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "dataCutoffAt": {
+          "format": "date-time",
+          "title": "Datacutoffat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runId",
+        "promptVersion",
+        "gatePromptVersion",
+        "reportPromptVersion",
+        "taxonomyVersion",
+        "schemaVersion",
+        "dataCutoffAt"
+      ],
+      "title": "BuildMetadata",
+      "type": "object"
+    },
+    "DailyReport": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "reportId": {
+          "minLength": 1,
+          "title": "Reportid",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "timezone": {
+          "const": "Asia/Shanghai",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "generatedAt": {
+          "format": "date-time",
+          "title": "Generatedat",
+          "type": "string"
+        },
+        "windowStart": {
+          "format": "date-time",
+          "title": "Windowstart",
+          "type": "string"
+        },
+        "windowEnd": {
+          "format": "date-time",
+          "title": "Windowend",
+          "type": "string"
+        },
+        "lead": {
+          "$ref": "#/$defs/Lead"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/ReportSection"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Sections",
+          "type": "array"
+        },
+        "keyDates": {
+          "items": {
+            "$ref": "#/$defs/KeyDate"
+          },
+          "title": "Keydates",
+          "type": "array"
+        },
+        "gate": {
+          "$ref": "#/$defs/ReportGate"
+        },
+        "build": {
+          "$ref": "#/$defs/BuildMetadata"
+        },
+        "reportType": {
+          "const": "daily",
+          "title": "Reporttype",
+          "type": "string"
+        },
+        "stats": {
+          "$ref": "#/$defs/DailyStats"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "reportId",
+        "date",
+        "timezone",
+        "generatedAt",
+        "windowStart",
+        "windowEnd",
+        "lead",
+        "sections",
+        "keyDates",
+        "gate",
+        "build",
+        "reportType",
+        "stats"
+      ],
+      "title": "DailyReport",
+      "type": "object"
+    },
+    "DailyStats": {
+      "additionalProperties": false,
+      "properties": {
+        "discovered": {
+          "minimum": 0,
+          "title": "Discovered",
+          "type": "integer"
+        },
+        "fetched": {
+          "minimum": 0,
+          "title": "Fetched",
+          "type": "integer"
+        },
+        "uniqueEvents": {
+          "minimum": 0,
+          "title": "Uniqueevents",
+          "type": "integer"
+        },
+        "analyzed": {
+          "minimum": 0,
+          "title": "Analyzed",
+          "type": "integer"
+        },
+        "included": {
+          "minimum": 0,
+          "title": "Included",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "discovered",
+        "fetched",
+        "uniqueEvents",
+        "analyzed",
+        "included"
+      ],
+      "title": "DailyStats",
+      "type": "object"
+    },
+    "GateStatus": {
+      "enum": [
+        "pending",
+        "passed",
+        "rejected"
+      ],
+      "title": "GateStatus",
+      "type": "string"
+    },
+    "ImpactDimension": {
+      "description": "资讯对卖家经营的影响面，相关文章必须选择一至三个。",
+      "enum": [
+        "money",
+        "goods",
+        "account",
+        "traffic",
+        "efficiency",
+        "competition"
+      ],
+      "title": "ImpactDimension",
+      "type": "string"
+    },
+    "ImportantChange": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Articleids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary",
+        "articleIds"
+      ],
+      "title": "ImportantChange",
+      "type": "object"
+    },
+    "KeyDate": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "dateType": {
+          "$ref": "#/$defs/KeyDateType"
+        },
+        "articleId": {
+          "minLength": 1,
+          "title": "Articleid",
+          "type": "string"
+        },
+        "event": {
+          "minLength": 1,
+          "title": "Event",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "dateType",
+        "articleId",
+        "event"
+      ],
+      "title": "KeyDate",
+      "type": "object"
+    },
+    "KeyDateType": {
+      "enum": [
+        "effective",
+        "deadline"
+      ],
+      "title": "KeyDateType",
+      "type": "string"
+    },
+    "Lead": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "summary"
+      ],
+      "title": "Lead",
+      "type": "object"
+    },
+    "MonthlyReport": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "reportId": {
+          "minLength": 1,
+          "title": "Reportid",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "timezone": {
+          "const": "Asia/Shanghai",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "generatedAt": {
+          "format": "date-time",
+          "title": "Generatedat",
+          "type": "string"
+        },
+        "windowStart": {
+          "format": "date-time",
+          "title": "Windowstart",
+          "type": "string"
+        },
+        "windowEnd": {
+          "format": "date-time",
+          "title": "Windowend",
+          "type": "string"
+        },
+        "lead": {
+          "$ref": "#/$defs/Lead"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/ReportSection"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Sections",
+          "type": "array"
+        },
+        "keyDates": {
+          "items": {
+            "$ref": "#/$defs/KeyDate"
+          },
+          "title": "Keydates",
+          "type": "array"
+        },
+        "gate": {
+          "$ref": "#/$defs/ReportGate"
+        },
+        "build": {
+          "$ref": "#/$defs/BuildMetadata"
+        },
+        "reportType": {
+          "const": "monthly",
+          "title": "Reporttype",
+          "type": "string"
+        },
+        "stats": {
+          "$ref": "#/$defs/MonthlyStats"
+        },
+        "monthLead": {
+          "$ref": "#/$defs/Lead"
+        },
+        "platformMatrix": {
+          "items": {
+            "$ref": "#/$defs/PlatformMatrixEntry"
+          },
+          "title": "Platformmatrix",
+          "type": "array"
+        },
+        "costAndRisk": {
+          "$ref": "#/$defs/NarrativeSection"
+        },
+        "trafficAndConversion": {
+          "$ref": "#/$defs/NarrativeSection"
+        },
+        "opportunities": {
+          "$ref": "#/$defs/NarrativeSection"
+        },
+        "trendEvidence": {
+          "items": {
+            "$ref": "#/$defs/TrendEvidence"
+          },
+          "title": "Trendevidence",
+          "type": "array"
+        },
+        "nextMonthCalendar": {
+          "items": {
+            "$ref": "#/$defs/KeyDate"
+          },
+          "title": "Nextmonthcalendar",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "reportId",
+        "date",
+        "timezone",
+        "generatedAt",
+        "windowStart",
+        "windowEnd",
+        "lead",
+        "sections",
+        "keyDates",
+        "gate",
+        "build",
+        "reportType",
+        "stats",
+        "monthLead",
+        "platformMatrix",
+        "costAndRisk",
+        "trafficAndConversion",
+        "opportunities",
+        "trendEvidence",
+        "nextMonthCalendar"
+      ],
+      "title": "MonthlyReport",
+      "type": "object"
+    },
+    "MonthlyStats": {
+      "additionalProperties": false,
+      "properties": {
+        "uniqueEvents": {
+          "minimum": 0,
+          "title": "Uniqueevents",
+          "type": "integer"
+        },
+        "sources": {
+          "minimum": 0,
+          "title": "Sources",
+          "type": "integer"
+        },
+        "officialSources": {
+          "minimum": 0,
+          "title": "Officialsources",
+          "type": "integer"
+        },
+        "publishedReports": {
+          "minimum": 0,
+          "title": "Publishedreports",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uniqueEvents",
+        "sources",
+        "officialSources",
+        "publishedReports"
+      ],
+      "title": "MonthlyStats",
+      "type": "object"
+    },
+    "NarrativeSection": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Articleids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary",
+        "articleIds"
+      ],
+      "title": "NarrativeSection",
+      "type": "object"
+    },
+    "PlatformMatrixEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "enum": [
+            "Amazon",
+            "Walmart",
+            "Shopify",
+            "TikTok Shop",
+            "Temu",
+            "eBay"
+          ],
+          "title": "Platform",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Articleids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "platform",
+        "summary",
+        "articleIds"
+      ],
+      "title": "PlatformMatrixEntry",
+      "type": "object"
+    },
+    "PrimaryCategory": {
+      "description": "卖家需要作出的主要经营决策分类，枚举值不得随意扩展。",
+      "enum": [
+        "amazon-policy",
+        "amazon-fba-fulfillment",
+        "fee-margin-tax",
+        "ads-traffic",
+        "listing-seo-voc",
+        "account-compliance-ip",
+        "crossborder-logistics",
+        "competitor-marketplaces",
+        "ai-ops-tools",
+        "seller-community-signal"
+      ],
+      "title": "PrimaryCategory",
+      "type": "string"
+    },
+    "RecurringSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Articleids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "summary",
+        "articleIds"
+      ],
+      "title": "RecurringSignal",
+      "type": "object"
+    },
+    "ReportGate": {
+      "additionalProperties": false,
+      "description": "嵌入报告 JSON 的关门状态；草稿允许 pending，导出前必须为 passed。",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/GateStatus"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "validatedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validatedat"
+        },
+        "promptVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Promptversion"
+        }
+      },
+      "required": [
+        "status",
+        "issues",
+        "validatedAt",
+        "promptVersion"
+      ],
+      "title": "ReportGate",
+      "type": "object"
+    },
+    "ReportItem": {
+      "additionalProperties": false,
+      "properties": {
+        "articleId": {
+          "minLength": 1,
+          "title": "Articleid",
+          "type": "string"
+        },
+        "clusterId": {
+          "minLength": 1,
+          "title": "Clusterid",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/ReportSource"
+        },
+        "sourceUrl": {
+          "minLength": 1,
+          "title": "Sourceurl",
+          "type": "string"
+        },
+        "publishedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Publishedat"
+        },
+        "primaryCategory": {
+          "$ref": "#/$defs/PrimaryCategory"
+        },
+        "impactDimensions": {
+          "items": {
+            "$ref": "#/$defs/ImpactDimension"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Impactdimensions",
+          "type": "array"
+        },
+        "whatHappened": {
+          "minLength": 1,
+          "title": "Whathappened",
+          "type": "string"
+        },
+        "whyImportant": {
+          "minLength": 1,
+          "title": "Whyimportant",
+          "type": "string"
+        },
+        "affectedMarketplaces": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Affectedmarketplaces",
+          "type": "array"
+        },
+        "affectedSellerTypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Affectedsellertypes",
+          "type": "array"
+        },
+        "effectiveAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Effectiveat"
+        },
+        "deadlineAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Deadlineat"
+        },
+        "suggestions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 0,
+          "title": "Suggestions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "articleId",
+        "clusterId",
+        "title",
+        "summary",
+        "source",
+        "sourceUrl",
+        "publishedAt",
+        "primaryCategory",
+        "impactDimensions",
+        "whatHappened",
+        "whyImportant",
+        "affectedMarketplaces",
+        "affectedSellerTypes",
+        "effectiveAt",
+        "deadlineAt",
+        "suggestions"
+      ],
+      "title": "ReportItem",
+      "type": "object"
+    },
+    "ReportPeriod": {
+      "additionalProperties": false,
+      "properties": {
+        "isoWeek": {
+          "minLength": 1,
+          "title": "Isoweek",
+          "type": "string"
+        },
+        "startDate": {
+          "format": "date",
+          "title": "Startdate",
+          "type": "string"
+        },
+        "endDate": {
+          "format": "date",
+          "title": "Enddate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "isoWeek",
+        "startDate",
+        "endDate"
+      ],
+      "title": "ReportPeriod",
+      "type": "object"
+    },
+    "ReportSection": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/PrimaryCategory"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ReportItem"
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "category",
+        "label",
+        "items"
+      ],
+      "title": "ReportSection",
+      "type": "object"
+    },
+    "ReportSource": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sourceClass": {
+          "$ref": "#/$defs/SourceClass"
+        }
+      },
+      "required": [
+        "name",
+        "sourceClass"
+      ],
+      "title": "ReportSource",
+      "type": "object"
+    },
+    "ReportTheme": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Articleids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "title",
+        "summary",
+        "articleIds"
+      ],
+      "title": "ReportTheme",
+      "type": "object"
+    },
+    "SourceClass": {
+      "enum": [
+        "official",
+        "professional-media",
+        "community",
+        "aggregator"
+      ],
+      "title": "SourceClass",
+      "type": "string"
+    },
+    "TrendEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "trend": {
+          "minLength": 1,
+          "title": "Trend",
+          "type": "string"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Articleids",
+          "type": "array"
+        },
+        "eventCount": {
+          "minimum": 1,
+          "title": "Eventcount",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "trend",
+        "articleIds",
+        "eventCount"
+      ],
+      "title": "TrendEvidence",
+      "type": "object"
+    },
+    "WatchlistItem": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "minLength": 1,
+          "title": "Item",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "articleIds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Articleids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item",
+        "articleIds"
+      ],
+      "title": "WatchlistItem",
+      "type": "object"
+    },
+    "WeeklyReport": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "reportId": {
+          "minLength": 1,
+          "title": "Reportid",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "timezone": {
+          "const": "Asia/Shanghai",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "generatedAt": {
+          "format": "date-time",
+          "title": "Generatedat",
+          "type": "string"
+        },
+        "windowStart": {
+          "format": "date-time",
+          "title": "Windowstart",
+          "type": "string"
+        },
+        "windowEnd": {
+          "format": "date-time",
+          "title": "Windowend",
+          "type": "string"
+        },
+        "lead": {
+          "$ref": "#/$defs/Lead"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/ReportSection"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Sections",
+          "type": "array"
+        },
+        "keyDates": {
+          "items": {
+            "$ref": "#/$defs/KeyDate"
+          },
+          "title": "Keydates",
+          "type": "array"
+        },
+        "gate": {
+          "$ref": "#/$defs/ReportGate"
+        },
+        "build": {
+          "$ref": "#/$defs/BuildMetadata"
+        },
+        "reportType": {
+          "const": "weekly",
+          "title": "Reporttype",
+          "type": "string"
+        },
+        "stats": {
+          "$ref": "#/$defs/WeeklyStats"
+        },
+        "period": {
+          "$ref": "#/$defs/ReportPeriod"
+        },
+        "themes": {
+          "items": {
+            "$ref": "#/$defs/ReportTheme"
+          },
+          "maxItems": 8,
+          "minItems": 3,
+          "title": "Themes",
+          "type": "array"
+        },
+        "recurringSignals": {
+          "items": {
+            "$ref": "#/$defs/RecurringSignal"
+          },
+          "title": "Recurringsignals",
+          "type": "array"
+        },
+        "importantChanges": {
+          "items": {
+            "$ref": "#/$defs/ImportantChange"
+          },
+          "title": "Importantchanges",
+          "type": "array"
+        },
+        "nextWeekWatchlist": {
+          "items": {
+            "$ref": "#/$defs/WatchlistItem"
+          },
+          "title": "Nextweekwatchlist",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "reportId",
+        "date",
+        "timezone",
+        "generatedAt",
+        "windowStart",
+        "windowEnd",
+        "lead",
+        "sections",
+        "keyDates",
+        "gate",
+        "build",
+        "reportType",
+        "stats",
+        "period",
+        "themes",
+        "recurringSignals",
+        "importantChanges",
+        "nextWeekWatchlist"
+      ],
+      "title": "WeeklyReport",
+      "type": "object"
+    },
+    "WeeklyStats": {
+      "additionalProperties": false,
+      "properties": {
+        "uniqueEvents": {
+          "minimum": 0,
+          "title": "Uniqueevents",
+          "type": "integer"
+        },
+        "sources": {
+          "minimum": 0,
+          "title": "Sources",
+          "type": "integer"
+        },
+        "officialSources": {
+          "minimum": 0,
+          "title": "Officialsources",
+          "type": "integer"
+        },
+        "dailyReports": {
+          "minimum": 0,
+          "title": "Dailyreports",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uniqueEvents",
+        "sources",
+        "officialSources",
+        "dailyReports"
+      ],
+      "title": "WeeklyStats",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "daily": "#/$defs/DailyReport",
+      "monthly": "#/$defs/MonthlyReport",
+      "weekly": "#/$defs/WeeklyReport"
+    },
+    "propertyName": "reportType"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/DailyReport"
+    },
+    {
+      "$ref": "#/$defs/WeeklyReport"
+    },
+    {
+      "$ref": "#/$defs/MonthlyReport"
+    }
+  ]
+}

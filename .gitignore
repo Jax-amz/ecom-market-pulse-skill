@@ -149,7 +149,6 @@ activemq-data/
 
 # Environments
 .env
-.envrc
 .venv
 env/
 venv/
@@ -181,6 +180,18 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# E-commerce market pulse root workspace. These paths can contain source
+# snapshots, DuckDB audit data, generated reports, or machine-local adapters.
+# Keep the installable Skill, fixtures, schemas and example configs tracked.
+/runtime/
+/config.yaml
+/config.local.yaml
+/data/ecom_market_pulse.duckdb
+/data/ecom_market_pulse.duckdb.wal
+/backups/
+/exports/
+/tmp/
+
 # PyCharm
 #   JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #   be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
@@ -205,6 +216,7 @@ tempCodeRunnerFile.py
 
 # Ruff stuff:
 .ruff_cache/
+.playwright-cli/
 
 # PyPI configuration file
 .pypirc

@@ -148,7 +148,7 @@ runtime/
 
 ### `config.yaml` 的最小结构
 
-请以 [config.example.yaml](skills/ecom-market-pulse/assets/config.example.yaml) 为起点。每个信源都必须有唯一的 `id`、来源级别、发现方式、采集策略和内容时区。
+请以 [config.example.yaml](skills/ecom-market-pulse/assets/config.example.yaml) 为起点。每个信源都必须有唯一的 `id`、来源级别、面向读者的主页、发现方式、采集策略和内容时区。
 
 ```yaml
 timezone: Asia/Shanghai
@@ -158,6 +158,7 @@ sources:
     name: About Amazon
     enabled: true
     source_class: official
+    homepage_url: https://www.aboutamazon.com/
     discovery:
       type: rss
       url: https://www.aboutamazon.com/rss/feed.rss
@@ -182,6 +183,7 @@ sources:
 | `name` | 是 | 报告与审计中展示的来源名称。 |
 | `enabled` | 是 | 是否参与本次采集。遇到问题可先改为 `false`，无需删除配置。 |
 | `source_class` | 是 | `official`、`professional-media`、`community`、`aggregator` 四选一。 |
+| `homepage_url` | 是 | 面向读者展示的信源主页；报告的 `sourceDirectory` 用它生成名称外链，不应填写 RSS 或 Sitemap 地址。 |
 | `discovery.type` | 是 | `rss`、`html`、`sitemap`，或项目内置的专用适配器类型。 |
 | `discovery.url` | 是 | 可公开访问的完整 `http`/`https` 地址。 |
 | `discovery.max_items` | 否 | 单次最多发现的候选条数。 |
@@ -207,6 +209,7 @@ sources:
   name: 示例行业媒体
   enabled: false
   source_class: professional-media
+  homepage_url: https://example.com/
   discovery:
     type: html
     url: https://example.com/news

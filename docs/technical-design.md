@@ -542,6 +542,7 @@ sources:
     name: Amazon Ads What's New
     enabled: true
     source_class: official
+    homepage_url: "https://advertising.amazon.com/zh-cn/resources/whats-new"
     discovery:
       type: html
       url: "${AMAZON_ADS_WHATS_NEW_URL}"
@@ -556,6 +557,8 @@ sources:
       language: en
       timezone: UTC
 ```
+
+`homepage_url` 是信源面向读者的主页，不得用 RSS 或 Sitemap 地址代替；日报、周报和月报的 `sourceDirectory` 直接使用它渲染信源名称链接。
 
 每个 HTML 信源上线前必须完成一次“适配器验收”：入口可公开访问、robots/条款允许、发布时间可提取、正文可提取、canonical 可识别、连续抓取不会触发登录或验证码。
 
@@ -871,10 +874,11 @@ class SourceAdapter(Protocol):
 | ---: | --- | --- |
 | 1 | `lead` | 当日资讯概览，不超过 200 个汉字 |
 | 2 | `stats` | 发现、抓取、去重后事件、分析和纳入草稿的数量 |
-| 3 | `sections` | 固定输出 10 个一级分类；空分类保留空数组；分类内按发布时间倒序 |
-| 4 | `keyDates` | 原文明确给出的生效日和截止日，按日期升序 |
-| 5 | `gate` | 最终主 Agent 关门校验状态、问题和校验时间 |
-| 6 | `build` | run、taxonomy、子 Agent 任务、关门校验、Schema 和数据截止时间版本 |
+| 3 | `sourceDirectory` | 所有已启用信源的 ID、名称、类型、主页和本期纳入篇数；0 篇不代表失效或未抓到内容 |
+| 4 | `sections` | 固定输出 10 个一级分类；空分类保留空数组；分类内按发布时间倒序 |
+| 5 | `keyDates` | 原文明确给出的生效日和截止日，按日期升序 |
+| 6 | `gate` | 最终主 Agent 关门校验状态、问题和校验时间 |
+| 7 | `build` | run、taxonomy、子 Agent 任务、关门校验、Schema 和数据截止时间版本 |
 
 选稿规则只有四条：
 
@@ -887,7 +891,7 @@ class SourceAdapter(Protocol):
 
 ```json
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "reportId": "daily-2026-07-17",
   "reportType": "daily",
   "date": "2026-07-17",
@@ -906,6 +910,22 @@ class SourceAdapter(Protocol):
     "analyzed": 38,
     "included": 34
   },
+  "sourceDirectory": [
+    {
+      "id": "amazon-global-selling-cn",
+      "name": "Amazon 全球开店中国",
+      "sourceClass": "official",
+      "homepageUrl": "https://gs.amazon.cn/news",
+      "articleCount": 0
+    },
+    {
+      "id": "amz123-zb",
+      "name": "AMZ123 跨境早报",
+      "sourceClass": "professional-media",
+      "homepageUrl": "https://www.amz123.com/zb",
+      "articleCount": 15
+    }
+  ],
   "sections": [
     {
       "category": "fee-margin-tax",
@@ -950,7 +970,7 @@ class SourceAdapter(Protocol):
     "analysisTaskVersion": "article-analysis-v1",
     "gateValidationVersion": "report-gate-v1",
     "taxonomyVersion": "1.0.0",
-    "schemaVersion": "1.0.0",
+    "schemaVersion": "1.1.0",
     "dataCutoffAt": "2026-07-17T00:00:00+08:00"
   }
 }

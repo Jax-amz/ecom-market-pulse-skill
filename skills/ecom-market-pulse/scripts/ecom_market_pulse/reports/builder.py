@@ -12,6 +12,8 @@ from datetime import date, datetime, time, timedelta
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
+from ..models import REPORT_SCHEMA_VERSION
+
 
 BUSINESS_TIMEZONE = "Asia/Shanghai"
 CATEGORY_ORDER = (
@@ -62,12 +64,13 @@ def build_report_draft(
     business_date: date,
     run_id: str,
     articles: Iterable[Mapping[str, Any]],
+    sources: Iterable[Any],
     stats: Mapping[str, int] | None = None,
     taxonomy_version: str = "1.0.0",
     prompt_version: str = "article-analysis-v1",
     gate_prompt_version: str = "report-gate-v1",
     report_prompt_version: str | None = None,
-    schema_version: str = "1.0.0",
+    schema_version: str = REPORT_SCHEMA_VERSION,
     narrative: Mapping[str, Any] | None = None,
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
@@ -80,6 +83,7 @@ def build_report_draft(
     start, end = _period_window(report_type, business_date, tz)
     representative = select_representative_articles(articles)
     sections = _build_sections(representative)
+    source_directory = _build_source_directory(sources, representative)
     report_id = f"{report_type}-{business_date.isoformat()}"
     effective_stats = _build_stats(report_type, stats, representative)
     report: dict[str, Any] = {
@@ -93,6 +97,7 @@ def build_report_draft(
         "windowEnd": end.isoformat(),
         "lead": _build_lead(report_type, len(representative), narrative),
         "stats": effective_stats,
+        "sourceDirectory": source_directory,
         "sections": sections,
         "keyDates": _build_key_dates(sections),
         "gate": {
@@ -176,6 +181,47 @@ def _build_sections(articles: Iterable[Mapping[str, Any]]) -> list[dict[str, Any
         {"category": category, "label": CATEGORY_LABELS[category], "items": buckets[category]}
         for category in CATEGORY_ORDER
     ]
+
+
+def _build_source_directory(sources: Iterable[Any], representative: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """以启用的信源配置生成完整目录，并按最终纳入报告的文章计数。"""
+
+    directories: list[dict[str, Any]] = []
+    configured_ids: set[str] = set()
+    for source in sources:
+        if not _configured_value(source, "enabled"):
+            continue
+        source_id = _configured_value(source, "id")
+        name = _configured_value(source, "name")
+        source_class = _configured_value(source, "sourceClass", "source_class")
+        homepage_url = _configured_value(source, "homepageUrl", "homepage_url")
+        if not all(isinstance(value, str) and value.strip() for value in (source_id, name, source_class, homepage_url)):
+            raise ValueError("已启用信源必须提供 id、name、sourceClass 和 homepageUrl")
+        if source_id in configured_ids:
+            raise ValueError(f"已启用信源 id 重复：{source_id}")
+        configured_ids.add(source_id)
+        directories.append(
+            {
+                "id": source_id,
+                "name": name,
+                "sourceClass": source_class,
+                "homepageUrl": homepage_url,
+                "articleCount": 0,
+            }
+        )
+
+    article_counts = Counter()
+    for article in representative:
+        source_id = _source_id(article)
+        if not source_id:
+            raise ValueError("纳入报告的文章缺少 sourceId，无法生成完整信源目录")
+        article_counts[source_id] += 1
+    unconfigured_ids = sorted(set(article_counts) - configured_ids)
+    if unconfigured_ids:
+        raise ValueError(f"纳入报告的文章引用了未启用或未配置的信源：{', '.join(unconfigured_ids)}")
+    for entry in directories:
+        entry["articleCount"] = article_counts[entry["id"]]
+    return directories
 
 
 def _to_report_item(article: Mapping[str, Any]) -> dict[str, Any]:
@@ -465,6 +511,19 @@ def _article_id(article: Mapping[str, Any]) -> str:
 def _source_id(article: Mapping[str, Any]) -> str | None:
     source = _value(article, "source", default={})
     return _value(article, "sourceId", "source_id", default=_value(source, "id"))
+
+
+def _configured_value(source: Any, *names: str, default: Any = None) -> Any:
+    """同时支持 YAML 映射与 Pydantic SourceConfig，避免报告构建层绑定配置实现。"""
+
+    if isinstance(source, Mapping):
+        return _value(source, *names, default=default)
+    for name in names:
+        if hasattr(source, name):
+            value = getattr(source, name)
+            if value is not None:
+                return value
+    return default
 
 
 def _source_class(article: Mapping[str, Any]) -> str | None:

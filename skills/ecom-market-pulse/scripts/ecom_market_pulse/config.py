@@ -140,10 +140,19 @@ class SourceConfig(ConfigModel):
     name: str = Field(..., min_length=1)
     enabled: bool
     source_class: SourceClass
+    homepage_url: str = Field(..., min_length=1)
     discovery: DiscoveryConfig
     category_hints: list[PrimaryCategory] = Field(..., min_length=1, max_length=3)
     fetch: FetchConfig
     content: ContentConfig
+
+    @field_validator("homepage_url")
+    @classmethod
+    def validate_homepage_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("homepage_url 必须是完整的 http 或 https URL")
+        return value
 
 
 class PulseConfig(ConfigModel):

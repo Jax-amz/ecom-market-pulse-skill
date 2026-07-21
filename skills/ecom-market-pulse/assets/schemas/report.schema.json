@@ -35,7 +35,7 @@
           "type": "string"
         },
         "schemaVersion": {
-          "const": "1.0.0",
+          "const": "1.1.0",
           "title": "Schemaversion",
           "type": "string"
         },
@@ -61,7 +61,7 @@
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
-          "const": "1.0.0",
+          "const": "1.1.0",
           "title": "Schemaversion",
           "type": "string"
         },
@@ -97,6 +97,13 @@
         },
         "lead": {
           "$ref": "#/$defs/Lead"
+        },
+        "sourceDirectory": {
+          "items": {
+            "$ref": "#/$defs/SourceDirectoryEntry"
+          },
+          "title": "Sourcedirectory",
+          "type": "array"
         },
         "sections": {
           "items": {
@@ -138,6 +145,7 @@
         "windowStart",
         "windowEnd",
         "lead",
+        "sourceDirectory",
         "sections",
         "keyDates",
         "gate",
@@ -298,7 +306,7 @@
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
-          "const": "1.0.0",
+          "const": "1.1.0",
           "title": "Schemaversion",
           "type": "string"
         },
@@ -334,6 +342,13 @@
         },
         "lead": {
           "$ref": "#/$defs/Lead"
+        },
+        "sourceDirectory": {
+          "items": {
+            "$ref": "#/$defs/SourceDirectoryEntry"
+          },
+          "title": "Sourcedirectory",
+          "type": "array"
         },
         "sections": {
           "items": {
@@ -408,6 +423,7 @@
         "windowStart",
         "windowEnd",
         "lead",
+        "sourceDirectory",
         "sections",
         "keyDates",
         "gate",
@@ -852,6 +868,45 @@
       "title": "SourceClass",
       "type": "string"
     },
+    "SourceDirectoryEntry": {
+      "additionalProperties": false,
+      "description": "报告期内所有已启用信源的可展示目录项。",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sourceClass": {
+          "$ref": "#/$defs/SourceClass"
+        },
+        "homepageUrl": {
+          "minLength": 1,
+          "title": "Homepageurl",
+          "type": "string"
+        },
+        "articleCount": {
+          "minimum": 0,
+          "title": "Articlecount",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "sourceClass",
+        "homepageUrl",
+        "articleCount"
+      ],
+      "title": "SourceDirectoryEntry",
+      "type": "object"
+    },
     "TrendEvidence": {
       "additionalProperties": false,
       "properties": {
@@ -922,7 +977,7 @@
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
-          "const": "1.0.0",
+          "const": "1.1.0",
           "title": "Schemaversion",
           "type": "string"
         },
@@ -958,6 +1013,13 @@
         },
         "lead": {
           "$ref": "#/$defs/Lead"
+        },
+        "sourceDirectory": {
+          "items": {
+            "$ref": "#/$defs/SourceDirectoryEntry"
+          },
+          "title": "Sourcedirectory",
+          "type": "array"
         },
         "sections": {
           "items": {
@@ -1032,6 +1094,7 @@
         "windowStart",
         "windowEnd",
         "lead",
+        "sourceDirectory",
         "sections",
         "keyDates",
         "gate",

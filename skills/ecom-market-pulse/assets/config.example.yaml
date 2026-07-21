@@ -4,6 +4,7 @@ sources:
     name: Amazon 全球开店中国
     enabled: true
     source_class: official
+    homepage_url: https://gs.amazon.cn/news
     discovery: {type: amazon-global-selling-cn, url: https://gs.amazon.cn/news, max_items: 20}
     category_hints: [amazon-policy]
     fetch: {interval_minutes: 240, requests_per_minute: 6, timeout_seconds: 20, max_retries: 2}
@@ -12,6 +13,7 @@ sources:
     name: About Amazon
     enabled: true
     source_class: official
+    homepage_url: https://www.aboutamazon.com/
     discovery: {type: rss, url: https://www.aboutamazon.com/rss/feed.rss, max_items: 20}
     category_hints: [amazon-policy]
     fetch: {interval_minutes: 120, requests_per_minute: 10, timeout_seconds: 20, max_retries: 2}
@@ -20,6 +22,7 @@ sources:
     name: Amazon Science
     enabled: true
     source_class: official
+    homepage_url: https://www.amazon.science/
     discovery: {type: rss, url: https://www.amazon.science/index.rss, max_items: 20}
     category_hints: [ai-ops-tools]
     fetch: {interval_minutes: 240, requests_per_minute: 6, timeout_seconds: 20, max_retries: 2}
@@ -28,6 +31,7 @@ sources:
     name: AMZ123 跨境早报
     enabled: true
     source_class: professional-media
+    homepage_url: https://www.amz123.com/zb
     discovery: {type: amz123-zb, url: https://www.amz123.com/zb, max_items: 20}
     category_hints: [amazon-policy]
     fetch: {interval_minutes: 240, requests_per_minute: 4, timeout_seconds: 20, max_retries: 2}
@@ -36,6 +40,7 @@ sources:
     name: Amazon Ads What's New
     enabled: true
     source_class: official
+    homepage_url: https://advertising.amazon.com/zh-cn/resources/whats-new
     discovery: {type: amazon-ads-whats-new, url: https://advertising.amazon.com/zh-cn/resources/whats-new, max_items: 20}
     category_hints: [ads-traffic]
     fetch: {interval_minutes: 120, requests_per_minute: 10, timeout_seconds: 20, max_retries: 2}

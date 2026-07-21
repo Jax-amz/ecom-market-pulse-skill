@@ -28,4 +28,5 @@ python skills/ecom-market-pulse/scripts/pulse.py collect --workspace ./runtime -
 - 401、403、验证码或登录页不绕过；记录失败并停止该信源本次采集。
 - 抓取和正文提取失败保留审计记录；子 agent 输出不符合合同则不落库。
 - 主 agent 核对文章证据与日报引用后才批准导出。
+- 构建日报、周报或月报时，必须从当前配置中全部 `enabled: true` 的信源生成 `sourceDirectory`；按最终纳入 `sections` 的代表文章计数，`0` 篇仅表示本期未纳入，且信源名称链接必须使用配置的 `homepage_url`。
 - 完成后报告时间窗口、实际信源、发现/去重/分析/草稿/关门结果和绝对导出路径。

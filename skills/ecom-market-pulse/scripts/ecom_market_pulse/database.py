@@ -645,7 +645,8 @@ class Database:
             SELECT * EXCLUDE (analysis_rank)
             FROM (
                 SELECT analyses.*, articles.canonical_url, articles.published_at, articles.event_key,
-                       articles.is_representative, sources.name AS source_name, sources.source_class,
+                       articles.is_representative, fetches.source_id AS source_id,
+                       sources.name AS source_name, sources.source_class,
                        ROW_NUMBER() OVER (
                            PARTITION BY analyses.article_id
                            ORDER BY analyses.created_at DESC, analyses.analysis_id DESC

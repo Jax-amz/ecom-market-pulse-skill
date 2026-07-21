@@ -10,11 +10,15 @@ from datetime import date, datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Any, Literal, Mapping, TypeAlias
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 
-SCHEMA_VERSION = "1.0.0"
+ARTICLE_SCHEMA_VERSION = "1.0.0"
+REPORT_SCHEMA_VERSION = "1.1.0"
+# 保留既有文章合同调用方对 SCHEMA_VERSION 的兼容；报告合同单独按版本演进。
+SCHEMA_VERSION = ARTICLE_SCHEMA_VERSION
 TAXONOMY_VERSION = "1.0.0"
 
 
@@ -171,10 +175,7 @@ class ArticleAnalysis(ContractModel):
     @field_validator("suggestions")
     @classmethod
     def validate_suggestion_length(cls, suggestions: list[str]) -> list[str]:
-        for suggestion in suggestions:
-            if not 15 <= len(suggestion) <= 60:
-                raise ValueError("每条 suggestions 必须为 15 至 60 个字符")
-        return suggestions
+        return _validate_suggestion_length(suggestions)
 
 
 class AgentProvenance(ContractModel):
@@ -186,7 +187,7 @@ class AgentProvenance(ContractModel):
 class Article(ContractModel):
     """单篇文章的权威业务 JSON 合同。"""
 
-    schema_version: Literal[SCHEMA_VERSION] = Field(..., alias="schemaVersion")
+    schema_version: Literal[ARTICLE_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
     id: str = Field(..., min_length=1)
     cluster_id: str = Field(..., alias="clusterId", min_length=1)
     title: str = Field(..., min_length=1)
@@ -247,6 +248,24 @@ class ReportSource(ContractModel):
     source_class: SourceClass = Field(..., alias="sourceClass")
 
 
+class SourceDirectoryEntry(ContractModel):
+    """报告期内所有已启用信源的可展示目录项。"""
+
+    id: str = Field(..., min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    name: str = Field(..., min_length=1)
+    source_class: SourceClass = Field(..., alias="sourceClass")
+    homepage_url: str = Field(..., alias="homepageUrl", min_length=1)
+    article_count: int = Field(..., alias="articleCount", ge=0)
+
+    @field_validator("homepage_url")
+    @classmethod
+    def validate_homepage_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("homepageUrl 必须是完整的 http 或 https URL")
+        return value
+
+
 class ReportItem(ContractModel):
     article_id: str = Field(..., alias="articleId", min_length=1)
     cluster_id: str = Field(..., alias="clusterId", min_length=1)
@@ -265,7 +284,10 @@ class ReportItem(ContractModel):
     deadline_at: datetime | None = Field(..., alias="deadlineAt")
     suggestions: list[str] = Field(..., min_length=0, max_length=3)
 
-    _validate_suggestion_length = field_validator("suggestions")(ArticleAnalysis.validate_suggestion_length)
+    @field_validator("suggestions")
+    @classmethod
+    def validate_suggestion_length(cls, suggestions: list[str]) -> list[str]:
+        return _validate_suggestion_length(suggestions)
 
     @field_validator("impact_dimensions")
     @classmethod
@@ -273,6 +295,13 @@ class ReportItem(ContractModel):
         if len(values) != len(set(values)):
             raise ValueError("impactDimensions 不能重复")
         return values
+
+
+def _validate_suggestion_length(suggestions: list[str]) -> list[str]:
+    for suggestion in suggestions:
+        if not 15 <= len(suggestion) <= 60:
+            raise ValueError("每条 suggestions 必须为 15 至 60 个字符")
+    return suggestions
 
 
 class ReportSection(ContractModel):
@@ -356,12 +385,12 @@ class BuildMetadata(ContractModel):
     gate_prompt_version: str = Field(..., alias="gatePromptVersion", min_length=1)
     report_prompt_version: str | None = Field(..., alias="reportPromptVersion")
     taxonomy_version: Literal[TAXONOMY_VERSION] = Field(..., alias="taxonomyVersion")
-    schema_version: Literal[SCHEMA_VERSION] = Field(..., alias="schemaVersion")
+    schema_version: Literal[REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
     data_cutoff_at: datetime = Field(..., alias="dataCutoffAt")
 
 
 class ReportBase(ContractModel):
-    schema_version: Literal[SCHEMA_VERSION] = Field(..., alias="schemaVersion")
+    schema_version: Literal[REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
     report_id: str = Field(..., alias="reportId", min_length=1)
     date: date
     timezone: Literal["Asia/Shanghai"]
@@ -369,6 +398,7 @@ class ReportBase(ContractModel):
     window_start: datetime = Field(..., alias="windowStart")
     window_end: datetime = Field(..., alias="windowEnd")
     lead: Lead
+    source_directory: list[SourceDirectoryEntry] = Field(..., alias="sourceDirectory")
     sections: list[ReportSection] = Field(..., min_length=10, max_length=10)
     key_dates: list[KeyDate] = Field(..., alias="keyDates")
     gate: ReportGate
@@ -385,6 +415,9 @@ class ReportBase(ContractModel):
             raise ValueError("keyDates 中的 articleId 必须存在于 reports.sections")
         if self.key_dates != sorted(self.key_dates, key=lambda item: item.date):
             raise ValueError("keyDates 必须按日期升序排列")
+        source_ids = [source.id for source in self.source_directory]
+        if len(source_ids) != len(set(source_ids)):
+            raise ValueError("sourceDirectory.id 必须唯一")
         return self
 
     @property
@@ -516,6 +549,7 @@ def validate_report(payload: Any) -> DailyReport | WeeklyReport | MonthlyReport:
 __all__ = [
     "Article",
     "ArticleAnalysis",
+    "ARTICLE_SCHEMA_VERSION",
     "BuildMetadata",
     "CATEGORY_LABELS",
     "Conflict",
@@ -540,9 +574,11 @@ __all__ = [
     "ReportGate",
     "ReportItem",
     "ReportSection",
+    "REPORT_SCHEMA_VERSION",
     "ReportType",
     "SCHEMA_VERSION",
     "SourceClass",
+    "SourceDirectoryEntry",
     "SourceReference",
     "SourceType",
     "TAXONOMY_VERSION",

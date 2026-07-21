@@ -201,6 +201,9 @@ class PublicHttpFetcher:
         self._client = httpx.Client(
             follow_redirects=True,
             timeout=httpx.Timeout(policy.timeout_seconds),
+            # 公开资讯采集不依赖本机代理；避免失效的 HTTP(S)_PROXY 环境变量
+            # 让所有信源在发现阶段被误判为空。
+            trust_env=False,
         )
         return self._client
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+import re
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -34,11 +36,14 @@ class Amz123MorningNewsAdapter:
         boundary = since.astimezone(UTC) if since.tzinfo else since.replace(tzinfo=UTC)
         items: list[DiscoveredItem] = []
         for row in rows:
-            published_at = _timestamp(row.get("published_at"))
-            if published_at and published_at < boundary:
-                continue
             cid = row.get("cid")
             if not isinstance(cid, int):
+                continue
+            # AMZ123 返回的 published_at 不是早报业务期：例如 cid=20260720
+            # 的记录可能携带 2026-07-17 的 Unix 时间。早报 cid 本身是稳定的
+            # YYYYMMDD 业务日期，优先据此决定是否进入增量窗口并写入文章提示时间。
+            published_at = _cid_business_time(cid) or _timestamp(row.get("published_at"))
+            if published_at and published_at < boundary:
                 continue
             detail = self._post_json(DETAIL_ENDPOINT, {"cid": cid, "client_type": 0}, timeout_seconds)
             for article in _content(detail):
@@ -71,6 +76,7 @@ def _post_public_json(url: str, payload: Mapping[str, Any], timeout_seconds: flo
         headers={"Accept": "application/json", "User-Agent": "ecom-market-pulse/1.0 (+public-content-collector)"},
         timeout=timeout_seconds,
         follow_redirects=False,
+        trust_env=False,
     )
     response.raise_for_status()
     decoded = response.json()
@@ -93,6 +99,16 @@ def _content(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
 
 def _timestamp(value: Any) -> datetime | None:
     if not isinstance(value, (int, float)):
+        return None
+
+
+def _cid_business_time(cid: int) -> datetime | None:
+    value = str(cid)
+    if re.fullmatch(r"\d{8}", value) is None:
+        return None
+    try:
+        return datetime.strptime(value, "%Y%m%d").replace(tzinfo=ZoneInfo("Asia/Shanghai")).astimezone(UTC)
+    except ValueError:
         return None
     try:
         return datetime.fromtimestamp(value, UTC)

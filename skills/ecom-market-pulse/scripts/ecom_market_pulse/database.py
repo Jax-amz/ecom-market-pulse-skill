@@ -10,6 +10,7 @@ from collections.abc import Generator, Iterable, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -96,8 +97,81 @@ class Database:
     def initialize(self) -> None:
         """初始化或校验六张表，建表和注释 SQL 可重复执行。"""
         self._require_connection()
+        if self._has_legacy_source_adapter_constraint():
+            self._migrate_legacy_source_adapter_constraint()
         schema_sql = _SCHEMA_PATH.read_text(encoding="utf-8")
         self._connection.execute(schema_sql)
+
+    def _has_legacy_source_adapter_constraint(self) -> bool:
+        """识别不支持 Amazon 专用采集适配器的历史 ``sources`` 表。"""
+        tables = self._fetchall(
+            "SELECT table_name FROM duckdb_tables() WHERE internal = FALSE AND schema_name = 'main'"
+        )
+        if "sources" not in {row["table_name"] for row in tables}:
+            return False
+        rows = self._fetchall(
+            """
+            SELECT constraint_text
+            FROM duckdb_constraints()
+            WHERE schema_name = 'main'
+              AND table_name = 'sources'
+              AND constraint_type = 'CHECK'
+            """
+        )
+        return any(
+            "adapter_type" in str(row["constraint_text"])
+            and "amazon-global-selling-cn" not in str(row["constraint_text"])
+            for row in rows
+        )
+
+    def _migrate_legacy_source_adapter_constraint(self) -> None:
+        """无损重建包含旧 ``sources`` 约束的 DuckDB 文件。
+
+        DuckDB 目前不支持删除 CHECK 约束。历史运行库会因此无法写入
+        ``amazon-global-selling-cn`` 与 ``amazon-ads-whats-new``，所以在原文件
+        所在目录新建符合当前 schema 的数据库，按外键依赖顺序复制六张表，
+        校验行数后原子替换；替换前的库保留为同目录备份，便于人工回退。
+        """
+        self._require_connection()
+        original_path = self.database_path
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        temporary_path = original_path.with_name(f"{original_path.stem}.migration-{uuid4().hex}.duckdb")
+        backup_path = original_path.with_name(f"{original_path.stem}.pre-migration-{stamp}.duckdb")
+        original_literal = str(original_path).replace("'", "''")
+        table_names = ("sources", "runs", "fetches", "articles", "analyses", "reports")
+
+        self._connection.close()
+        self._connection = None
+        try:
+            migrated = duckdb.connect(str(temporary_path))
+            try:
+                migrated.execute(_SCHEMA_PATH.read_text(encoding="utf-8"))
+                migrated.execute(f"ATTACH '{original_literal}' AS legacy (READ_ONLY)")
+                for table_name in table_names:
+                    migrated.execute(f"INSERT INTO {table_name} SELECT * FROM legacy.{table_name}")
+                    expected_count = migrated.execute(f"SELECT count(*) FROM legacy.{table_name}").fetchone()[0]
+                    actual_count = migrated.execute(f"SELECT count(*) FROM {table_name}").fetchone()[0]
+                    if actual_count != expected_count:
+                        raise DatabaseError(
+                            f"历史数据库迁移校验失败：{table_name} 预期 {expected_count} 行，实际 {actual_count} 行"
+                        )
+                migrated.execute("DETACH legacy")
+            finally:
+                migrated.close()
+
+            os.replace(original_path, backup_path)
+            try:
+                os.replace(temporary_path, original_path)
+            except BaseException:
+                os.replace(backup_path, original_path)
+                raise
+            self._connection = duckdb.connect(str(original_path))
+        except BaseException:
+            if temporary_path.exists():
+                temporary_path.unlink()
+            if self._connection is None and original_path.exists():
+                self._connection = duckdb.connect(str(original_path))
+            raise
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:

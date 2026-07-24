@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 from typing import Any, Mapping
 
+from ..reports.title_policy import validate_report_editorial_title
 from .json_exporter import _atomic_write, export_report_json
 from .markdown import render_markdown
 
@@ -19,7 +21,12 @@ def export_passed_report(report: Mapping[str, Any], workspace: Path, *, include_
     business_date = str(report.get("date") or "")
     if report_type not in {"daily", "weekly", "monthly"} or not business_date:
         raise ValueError("报告缺少合法 reportType 或 date")
-    output_dir = workspace.expanduser().resolve() / "exports" / report_type
+    workspace = workspace.expanduser().resolve()
+    validate_report_editorial_title(
+        report,
+        recent_titles=_recent_daily_titles(workspace, business_date) if report_type == "daily" else (),
+    )
+    output_dir = workspace / "exports" / report_type
     artifact_name = _artifact_name(report_type, business_date, report)
     report_json = export_report_json(report, output_dir / f"{artifact_name}.json")
     latest_json = export_report_json(report, output_dir / "latest.json")
@@ -29,6 +36,26 @@ def export_passed_report(report: Mapping[str, Any], workspace: Path, *, include_
         _atomic_write(markdown_path, render_markdown(report))
         exported["markdown"] = markdown_path.resolve()
     return exported
+
+
+def _recent_daily_titles(workspace: Path, business_date: str) -> list[str]:
+    manifest_path = workspace / "exports" / "manifest.json"
+    if not manifest_path.is_file():
+        return []
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        entries = manifest["reports"]["daily"]
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("现有 manifest 无法读取，禁止绕过近期标题查重") from error
+    if not isinstance(entries, list):
+        raise ValueError("现有 manifest.reports.daily 必须为数组")
+    return [
+        str(entry["title"])
+        for entry in entries
+        if isinstance(entry, Mapping)
+        and entry.get("date") != business_date
+        and isinstance(entry.get("title"), str)
+    ][:7]
 
 
 def _artifact_name(report_type: str, business_date: str, report: Mapping[str, Any]) -> str:

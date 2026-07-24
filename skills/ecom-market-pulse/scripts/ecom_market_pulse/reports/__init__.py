@@ -8,6 +8,7 @@ from .builder import (
     collect_evidence,
     select_representative_articles,
 )
+from .title_policy import report_editorial_title_issues, validate_report_editorial_title
 
 __all__ = [
     "CATEGORY_LABELS",
@@ -16,4 +17,6 @@ __all__ = [
     "build_report_draft",
     "collect_evidence",
     "select_representative_articles",
+    "report_editorial_title_issues",
+    "validate_report_editorial_title",
 ]

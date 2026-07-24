@@ -13,6 +13,7 @@ from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 from ..models import REPORT_SCHEMA_VERSION
+from .title_policy import validate_report_editorial_title
 
 
 BUSINESS_TIMEZONE = "Asia/Shanghai"
@@ -137,6 +138,8 @@ def apply_gate_result(report: Mapping[str, Any], gate_result: Mapping[str, Any])
     result = deepcopy(dict(report))
     if gate_result.get("reportId") and gate_result["reportId"] != result.get("reportId"):
         raise ValueError("关门验证结果的 reportId 与报告草稿不一致")
+    if status == "passed":
+        validate_report_editorial_title(report)
     result["gate"] = {
         "status": status,
         "issues": list(gate_result.get("issues") or []),

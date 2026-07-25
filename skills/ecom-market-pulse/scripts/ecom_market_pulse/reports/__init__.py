@@ -7,6 +7,8 @@ from .builder import (
     build_report_draft,
     collect_evidence,
     select_representative_articles,
+    weekly_archive_label,
+    weekly_archive_number,
 )
 from .title_policy import report_editorial_title_issues, validate_report_editorial_title
 
@@ -17,6 +19,8 @@ __all__ = [
     "build_report_draft",
     "collect_evidence",
     "select_representative_articles",
+    "weekly_archive_label",
+    "weekly_archive_number",
     "report_editorial_title_issues",
     "validate_report_editorial_title",
 ]

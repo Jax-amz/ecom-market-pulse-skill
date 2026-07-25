@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
+from ..models import validate_report
 from ..reports.title_policy import validate_report_editorial_title
 from .json_exporter import _atomic_write, export_report_json
 from .markdown import render_markdown
@@ -21,6 +22,9 @@ def export_passed_report(report: Mapping[str, Any], workspace: Path, *, include_
     business_date = str(report.get("date") or "")
     if report_type not in {"daily", "weekly", "monthly"} or not business_date:
         raise ValueError("报告缺少合法 reportType 或 date")
+    if report_type == "weekly":
+        # 导出是最后一道确定性边界；即使报告不是由内置 builder 生成，也不能绕过工作周合同。
+        validate_report(report)
     workspace = workspace.expanduser().resolve()
     validate_report_editorial_title(
         report,

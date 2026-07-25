@@ -17,6 +17,7 @@ from .title_policy import validate_report_editorial_title
 
 
 BUSINESS_TIMEZONE = "Asia/Shanghai"
+WEEKLY_BUSINESS_DAYS = 5
 CATEGORY_ORDER = (
     "amazon-policy",
     "amazon-fba-fulfillment",
@@ -59,6 +60,20 @@ def select_representative_articles(articles: Iterable[Mapping[str, Any]]) -> lis
     return sorted(selected, key=_published_sort_key, reverse=True)
 
 
+def weekly_archive_number(period_start: date) -> int:
+    """按周一在所属月份中的位置计算用户可见周序。"""
+
+    if period_start.isoweekday() != 1:
+        raise ValueError("周报归档日期必须是周一")
+    return (period_start.day - 1) // 7 + 1
+
+
+def weekly_archive_label(period_start: date) -> str:
+    """返回“第X周”；例如 2026-07-20 为 7 月第3周。"""
+
+    return f"第{weekly_archive_number(period_start)}周"
+
+
 def build_report_draft(
     *,
     report_type: str,
@@ -85,13 +100,14 @@ def build_report_draft(
     representative = select_representative_articles(articles)
     sections = _build_sections(representative)
     source_directory = _build_source_directory(sources, representative)
-    report_id = f"{report_type}-{business_date.isoformat()}"
+    report_date = start.date() if report_type == "weekly" else business_date
+    report_id = f"{report_type}-{report_date.isoformat()}"
     effective_stats = _build_stats(report_type, stats, representative)
     report: dict[str, Any] = {
         "schemaVersion": schema_version,
         "reportId": report_id,
         "reportType": report_type,
-        "date": business_date.isoformat(),
+        "date": report_date.isoformat(),
         "timezone": BUSINESS_TIMEZONE,
         "generatedAt": generated_at.isoformat(),
         "windowStart": start.isoformat(),
@@ -427,7 +443,8 @@ def _period_window(report_type: str, business_date: date, tz: ZoneInfo) -> tuple
         end_date = business_date + timedelta(days=1)
     elif report_type == "weekly":
         start_date = business_date - timedelta(days=business_date.isoweekday() - 1)
-        end_date = start_date + timedelta(days=7)
+        # 周报只汇总周一至周五的日报；半开区间结束点固定为周六 00:00。
+        end_date = start_date + timedelta(days=WEEKLY_BUSINESS_DAYS)
     else:
         start_date = business_date.replace(day=1)
         end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)

@@ -6,11 +6,12 @@ Pydantic 模型是文章与报告 JSON Schema 的唯一事实来源。数据库�
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Any, Literal, Mapping, TypeAlias
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
@@ -472,6 +473,34 @@ class WeeklyReport(ReportBase):
     recurring_signals: list[RecurringSignal] = Field(..., alias="recurringSignals")
     important_changes: list[ImportantChange] = Field(..., alias="importantChanges")
     next_week_watchlist: list[WatchlistItem] = Field(..., alias="nextWeekWatchlist")
+
+    @model_validator(mode="after")
+    def validate_workweek_contract(self) -> WeeklyReport:
+        """周报公开周期固定为周一至周五，不接受自然周或任意日期范围。"""
+
+        start_date = self.period.start_date
+        end_date = self.period.end_date
+        if start_date.isoweekday() != 1:
+            raise ValueError("周报 period.startDate 必须是周一")
+        if end_date != start_date + timedelta(days=4):
+            raise ValueError("周报 period.endDate 必须是同一工作周的周五")
+        if self.date != start_date:
+            raise ValueError("周报 date 必须等于 period.startDate")
+
+        iso_year, iso_week, _ = start_date.isocalendar()
+        if self.period.iso_week != f"{iso_year}-W{iso_week:02d}":
+            raise ValueError("周报 period.isoWeek 必须与 period.startDate 对应")
+
+        timezone = ZoneInfo("Asia/Shanghai")
+        expected_window_start = datetime.combine(start_date, time.min, tzinfo=timezone)
+        expected_window_end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=timezone)
+        if self.window_start != expected_window_start:
+            raise ValueError("周报 windowStart 必须是周一 00:00:00+08:00")
+        if self.window_end != expected_window_end:
+            raise ValueError("周报 windowEnd 必须是周六 00:00:00+08:00")
+        if self.gate.status is GateStatus.PASSED and self.stats.daily_reports != 5:
+            raise ValueError("通过关门验证的周报必须汇总 5 份工作日日报")
+        return self
 
 
 class NarrativeSection(ContractModel):

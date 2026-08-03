@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -50,6 +50,7 @@ def _weekly_draft(*, daily_reports: int = 5) -> dict[str, object]:
         articles=[article],
         sources=[source],
         stats={"dailyReports": daily_reports},
+        generated_at=datetime.fromisoformat("2026-07-24T16:10:00+08:00"),
     )
 
 
@@ -58,7 +59,7 @@ def test_weekly_period_is_monday_to_friday() -> None:
 
     assert report["date"] == "2026-07-20"
     assert report["windowStart"] == "2026-07-20T00:00:00+08:00"
-    assert report["windowEnd"] == "2026-07-25T00:00:00+08:00"
+    assert report["windowEnd"] == "2026-07-24T16:00:00+08:00"
     assert report["period"] == {
         "isoWeek": "2026-W30",
         "startDate": "2026-07-20",
@@ -76,12 +77,22 @@ def test_weekly_contract_rejects_natural_week_end() -> None:
         validate_report(report)
 
 
+def test_legacy_weekly_contract_remains_readable() -> None:
+    report = deepcopy(_weekly_draft())
+    report["schemaVersion"] = "1.1.0"
+    report["build"]["schemaVersion"] = "1.1.0"
+    report["windowEnd"] = "2026-07-25T00:00:00+08:00"
+    report["build"]["dataCutoffAt"] = "2026-07-25T00:00:00+08:00"
+
+    assert validate_report(report).schema_version == "1.1.0"
+
+
 def test_passed_weekly_report_requires_five_daily_reports() -> None:
     report = _weekly_draft(daily_reports=4)
     report["gate"] = {
         "status": "passed",
         "issues": [],
-        "validatedAt": "2026-07-25T08:30:00+08:00",
+        "validatedAt": "2026-07-24T16:30:00+08:00",
         "promptVersion": "weekly-report-gate-v1",
     }
 
@@ -94,12 +105,25 @@ def test_export_rechecks_weekly_workday_contract(tmp_path) -> None:
     report["gate"] = {
         "status": "passed",
         "issues": [],
-        "validatedAt": "2026-07-25T08:30:00+08:00",
+        "validatedAt": "2026-07-24T16:30:00+08:00",
         "promptVersion": "weekly-report-gate-v1",
     }
 
     with pytest.raises(ValidationError, match="必须汇总 5 份工作日日报"):
         export_passed_report(report, tmp_path)
+
+
+def test_weekly_report_cannot_pass_before_friday_cutoff() -> None:
+    report = _weekly_draft()
+    report["gate"] = {
+        "status": "passed",
+        "issues": [],
+        "validatedAt": "2026-07-24T15:59:59+08:00",
+        "promptVersion": "weekly-report-gate-v1",
+    }
+
+    with pytest.raises(ValidationError, match="周五 16:00"):
+        validate_report(report)
 
 
 def test_weekly_period_contains_exactly_five_business_dates() -> None:

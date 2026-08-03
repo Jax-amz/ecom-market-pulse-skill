@@ -891,7 +891,7 @@ class SourceAdapter(Protocol):
 
 ```json
 {
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "reportId": "daily-2026-07-17",
   "reportType": "daily",
   "date": "2026-07-17",
@@ -970,7 +970,7 @@ class SourceAdapter(Protocol):
     "analysisTaskVersion": "article-analysis-v1",
     "gateValidationVersion": "report-gate-v1",
     "taxonomyVersion": "1.0.0",
-    "schemaVersion": "1.1.0",
+    "schemaVersion": "1.2.0",
     "dataCutoffAt": "2026-07-17T00:00:00+08:00"
   }
 }
@@ -992,7 +992,9 @@ class SourceAdapter(Protocol):
 
 月报面向经营复盘，需要增加：
 
+- `period`: `YYYY-MM`、自然月开始和结束日期。
 - `monthLead`: 本月核心判断。
+- `stats`: 独立事件、来源数、官方源数量、合格工作日日报数量。
 - `platformMatrix`: Amazon、Walmart、Shopify、TikTok Shop、Temu、eBay 的变化矩阵。
 - `costAndRisk`: 费用、物流、关税、税务和合规风险。
 - `trafficAndConversion`: 广告、搜索、Listing、评论和 VOC 趋势。
@@ -1001,6 +1003,10 @@ class SourceAdapter(Protocol):
 - `nextMonthCalendar`: 下一月生效日和截止日。
 
 周报/月报的趋势必须由已发布事件数量和来源证据支撑，禁止由子 Agent 脱离证据制造趋势。
+
+周报和月报采用业务截止口径：周报 `windowEnd` 为周五 16:00，月报 `windowEnd` 为自然月最后一天 16:00。截止任务必须先补采上午日报之后的新资讯，再重新构建汇总报告；`generatedAt`、`gate.validatedAt` 均不得早于 `windowEnd`。
+
+月报顶层 `date` 等于月初，候选集直接来自目标月全部周一至周五的合格日报与月末截止增量事实并回到文章事实层聚类，不能只基于周报再次提炼。通过关门时 `stats.dailyReports` 必须等于目标月的全部工作日数量。截止点之后首次发现的资讯顺延到下一业务周期。
 
 ## 15. 采集与调度
 
@@ -1029,9 +1035,11 @@ Skill 本身不是调度器。开发环境可由 Agent 手动调用；生产环�
 
 - 官方 RSS：每 2 小时。
 - 普通网页：每 4 小时，单域名限速。
-- 日报：北京时间每天 08:00，统计前一自然日或配置窗口。
-- 周报：每周一 08:30，聚合上一 ISO 周。
-- 月报：每月 1 日 09:00，聚合上月。
+- 日报：北京时间工作日 10:00，生成当天资讯快照。
+- 周报：每周五 16:00，先做截止增量采集，再聚合本周周一至周五。
+- 月报：每月最后一个自然日 20:00，使用当日 16:00 截止数据聚合本月；不能写死为 31 日。
+
+月末恰逢周五时，周报先执行，月报后执行。月报更新 manifest 前必须重新读取最新远端版本，避免覆盖当天刚发布的周报条目。
 
 同一周期按以下顺序执行：
 

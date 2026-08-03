@@ -15,9 +15,11 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
+from .periods import calendar_month_window, monthly_business_dates, report_cutoff_at
+
 
 ARTICLE_SCHEMA_VERSION = "1.0.0"
-REPORT_SCHEMA_VERSION = "1.1.0"
+REPORT_SCHEMA_VERSION = "1.2.0"
 # 保留既有文章合同调用方对 SCHEMA_VERSION 的兼容；报告合同单独按版本演进。
 SCHEMA_VERSION = ARTICLE_SCHEMA_VERSION
 TAXONOMY_VERSION = "1.0.0"
@@ -343,7 +345,7 @@ class MonthlyStats(ContractModel):
     unique_events: int = Field(..., alias="uniqueEvents", ge=0)
     sources: int = Field(..., ge=0)
     official_sources: int = Field(..., alias="officialSources", ge=0)
-    published_reports: int = Field(..., alias="publishedReports", ge=0)
+    daily_reports: int = Field(..., alias="dailyReports", ge=0)
 
 
 class KeyDate(ContractModel):
@@ -377,6 +379,8 @@ class ReportGate(ContractModel):
             return self
         if self.validated_at is None or not self.prompt_version:
             raise ValueError("已完成的 gate 必须填写 validatedAt 和 promptVersion")
+        if self.status is GateStatus.PASSED and self.issues:
+            raise ValueError("passed gate 的 issues 必须为空")
         return self
 
 
@@ -386,12 +390,12 @@ class BuildMetadata(ContractModel):
     gate_prompt_version: str = Field(..., alias="gatePromptVersion", min_length=1)
     report_prompt_version: str | None = Field(..., alias="reportPromptVersion")
     taxonomy_version: Literal[TAXONOMY_VERSION] = Field(..., alias="taxonomyVersion")
-    schema_version: Literal[REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
+    schema_version: Literal["1.1.0", REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
     data_cutoff_at: datetime = Field(..., alias="dataCutoffAt")
 
 
 class ReportBase(ContractModel):
-    schema_version: Literal[REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
+    schema_version: Literal["1.1.0", REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
     report_id: str = Field(..., alias="reportId", min_length=1)
     date: date
     timezone: Literal["Asia/Shanghai"]
@@ -409,6 +413,8 @@ class ReportBase(ContractModel):
     def validate_report_shape(self) -> ReportBase:
         if self.window_start >= self.window_end:
             raise ValueError("windowStart 必须早于 windowEnd")
+        if self.schema_version != self.build.schema_version:
+            raise ValueError("顶层 schemaVersion 必须与 build.schemaVersion 一致")
         categories = [section.category for section in self.sections]
         if tuple(categories) != PRIMARY_CATEGORY_ORDER:
             raise ValueError("sections 必须按固定顺序完整输出十个一级分类")
@@ -476,7 +482,7 @@ class WeeklyReport(ReportBase):
 
     @model_validator(mode="after")
     def validate_workweek_contract(self) -> WeeklyReport:
-        """周报公开周期固定为周一至周五，不接受自然周或任意日期范围。"""
+        """周报固定为周一至周五，新合同使用周五 16:00 业务截止。"""
 
         start_date = self.period.start_date
         end_date = self.period.end_date
@@ -493,13 +499,56 @@ class WeeklyReport(ReportBase):
 
         timezone = ZoneInfo("Asia/Shanghai")
         expected_window_start = datetime.combine(start_date, time.min, tzinfo=timezone)
-        expected_window_end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=timezone)
+        expected_window_end = (
+            datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=timezone)
+            if self.schema_version == "1.1.0"
+            else report_cutoff_at(end_date)
+        )
         if self.window_start != expected_window_start:
             raise ValueError("周报 windowStart 必须是周一 00:00:00+08:00")
         if self.window_end != expected_window_end:
-            raise ValueError("周报 windowEnd 必须是周六 00:00:00+08:00")
+            if self.schema_version == "1.1.0":
+                raise ValueError("1.1.0 周报 windowEnd 必须是周六 00:00:00+08:00")
+            raise ValueError("1.2.0 周报 windowEnd 必须是周五 16:00:00+08:00")
+        if self.schema_version == REPORT_SCHEMA_VERSION and self.build.data_cutoff_at != expected_window_end:
+            raise ValueError("1.2.0 周报 build.dataCutoffAt 必须等于 windowEnd")
         if self.gate.status is GateStatus.PASSED and self.stats.daily_reports != 5:
             raise ValueError("通过关门验证的周报必须汇总 5 份工作日日报")
+        if self.schema_version == REPORT_SCHEMA_VERSION and self.gate.status is GateStatus.PASSED:
+            if (
+                self.gate.validated_at is None
+                or self.gate.validated_at.utcoffset() is None
+                or self.gate.validated_at.astimezone(timezone) < expected_window_end
+            ):
+                raise ValueError("周报只能在周五 16:00 截止补采后通过关门验证")
+            if (
+                self.generated_at.utcoffset() is None
+                or self.generated_at.astimezone(timezone) < expected_window_end
+            ):
+                raise ValueError("通过关门验证的周报必须在周五 16:00 截止补采后重新生成")
+        if self.schema_version == REPORT_SCHEMA_VERSION:
+            selected_count = len(self.article_ids)
+            if selected_count > 20:
+                raise ValueError("1.2.0 周报重点展示事件不得超过 20 个")
+            if self.stats.unique_events < selected_count:
+                raise ValueError("周报 stats.uniqueEvents 不得少于重点展示事件数")
+            if self.stats.unique_events <= 20 and selected_count != self.stats.unique_events:
+                raise ValueError("候选事件不超过 20 个时必须全部展示")
+            if self.stats.unique_events >= 12 and selected_count < 12:
+                raise ValueError("候选充足时周报重点展示事件不得少于 12 个")
+
+            reference_groups = [
+                *(theme.article_ids for theme in self.themes),
+                *(signal.article_ids for signal in self.recurring_signals),
+                *(change.article_ids for change in self.important_changes),
+                *(item.article_ids for item in self.next_week_watchlist),
+            ]
+            unknown_ids = sorted(
+                {article_id for group in reference_groups for article_id in group}
+                - self.article_ids
+            )
+            if unknown_ids:
+                raise ValueError(f"周报扩展字段引用了未入选文章：{', '.join(unknown_ids)}")
         return self
 
 
@@ -530,23 +579,101 @@ PLATFORM_MATRIX_ORDER: tuple[str, ...] = (
 )
 
 
+class MonthlyPeriod(ContractModel):
+    month: str = Field(..., pattern=r"^\d{4}-\d{2}$")
+    start_date: date = Field(..., alias="startDate")
+    end_date: date = Field(..., alias="endDate")
+
+
 class MonthlyReport(ReportBase):
+    schema_version: Literal[REPORT_SCHEMA_VERSION] = Field(..., alias="schemaVersion")
     report_type: Literal[ReportType.MONTHLY] = Field(..., alias="reportType")
     stats: MonthlyStats
+    period: MonthlyPeriod
     month_lead: Lead = Field(..., alias="monthLead")
     platform_matrix: list[PlatformMatrixEntry] = Field(..., alias="platformMatrix")
     cost_and_risk: NarrativeSection = Field(..., alias="costAndRisk")
     traffic_and_conversion: NarrativeSection = Field(..., alias="trafficAndConversion")
     opportunities: NarrativeSection
-    trend_evidence: list[TrendEvidence] = Field(..., alias="trendEvidence")
+    trend_evidence: list[TrendEvidence] = Field(..., alias="trendEvidence", min_length=1)
     next_month_calendar: list[KeyDate] = Field(..., alias="nextMonthCalendar")
 
     @model_validator(mode="after")
-    def validate_platform_matrix(self) -> MonthlyReport:
+    def validate_calendar_month_contract(self) -> MonthlyReport:
+        """月报按自然月归档，新合同使用月末最后一天 16:00 业务截止。"""
+
+        if self.schema_version != REPORT_SCHEMA_VERSION:
+            raise ValueError(f"月报必须使用报告合同 {REPORT_SCHEMA_VERSION}")
+        expected_start, expected_next_month = calendar_month_window(self.period.start_date)
+        expected_end = expected_next_month - timedelta(days=1)
+        if self.period.start_date != expected_start:
+            raise ValueError("月报 period.startDate 必须是自然月第一天")
+        if self.period.end_date != expected_end:
+            raise ValueError("月报 period.endDate 必须是同一自然月最后一天")
+        if self.period.month != expected_start.strftime("%Y-%m"):
+            raise ValueError("月报 period.month 必须与 period.startDate 对应")
+        if self.date != expected_start:
+            raise ValueError("月报 date 必须等于 period.startDate")
+        if self.report_id != f"monthly-{expected_start.isoformat()}":
+            raise ValueError("月报 reportId 必须由 period.startDate 生成")
+
+        timezone = ZoneInfo("Asia/Shanghai")
+        expected_window_start = datetime.combine(expected_start, time.min, tzinfo=timezone)
+        expected_window_end = report_cutoff_at(expected_end)
+        if self.window_start != expected_window_start:
+            raise ValueError("月报 windowStart 必须是自然月第一天 00:00:00+08:00")
+        if self.window_end != expected_window_end:
+            raise ValueError("月报 windowEnd 必须是自然月最后一天 16:00:00+08:00")
+        if self.build.data_cutoff_at != expected_window_end:
+            raise ValueError("月报 build.dataCutoffAt 必须等于 windowEnd")
+
         platforms = tuple(entry.platform for entry in self.platform_matrix)
         if platforms != PLATFORM_MATRIX_ORDER:
             raise ValueError("platformMatrix 必须按固定顺序覆盖六个竞品平台")
+        self._validate_monthly_references()
+
+        if self.gate.status is GateStatus.PASSED:
+            expected_daily_reports = len(monthly_business_dates(expected_start))
+            if self.stats.daily_reports != expected_daily_reports:
+                raise ValueError(f"通过关门验证的月报必须汇总 {expected_daily_reports} 份工作日日报")
+            if (
+                self.gate.validated_at is None
+                or self.gate.validated_at.utcoffset() is None
+                or self.gate.validated_at.astimezone(timezone) < expected_window_end
+            ):
+                raise ValueError("月报只能在月末 16:00 截止补采后通过关门验证")
+            if (
+                self.generated_at.utcoffset() is None
+                or self.generated_at.astimezone(timezone) < expected_window_end
+            ):
+                raise ValueError("通过关门验证的月报必须在月末 16:00 截止补采后重新生成")
         return self
+
+    def _validate_monthly_references(self) -> None:
+        article_ids = self.article_ids
+        reference_groups = [
+            *(entry.article_ids for entry in self.platform_matrix),
+            self.cost_and_risk.article_ids,
+            self.traffic_and_conversion.article_ids,
+            self.opportunities.article_ids,
+            *(entry.article_ids for entry in self.trend_evidence),
+            *([entry.article_id] for entry in self.next_month_calendar),
+        ]
+        unknown_ids = sorted({article_id for group in reference_groups for article_id in group} - article_ids)
+        if unknown_ids:
+            raise ValueError(f"月报扩展字段引用了未入选文章：{', '.join(unknown_ids)}")
+        for trend in self.trend_evidence:
+            if trend.event_count != len(set(trend.article_ids)):
+                raise ValueError("trendEvidence.eventCount 必须等于去重后的 articleIds 数量")
+
+        next_month_start, following_month_start = calendar_month_window(
+            self.period.end_date + timedelta(days=1)
+        )
+        if any(
+            not next_month_start <= item.date < following_month_start
+            for item in self.next_month_calendar
+        ):
+            raise ValueError("nextMonthCalendar.date 必须位于紧随报告期之后的自然月")
 
 
 Report: TypeAlias = Annotated[
@@ -595,6 +722,7 @@ __all__ = [
     "KeyDate",
     "KeyDateType",
     "AgentProvenance",
+    "MonthlyPeriod",
     "MonthlyReport",
     "PLATFORM_MATRIX_ORDER",
     "PRIMARY_CATEGORY_ORDER",

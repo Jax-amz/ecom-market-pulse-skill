@@ -22,8 +22,8 @@ def export_passed_report(report: Mapping[str, Any], workspace: Path, *, include_
     business_date = str(report.get("date") or "")
     if report_type not in {"daily", "weekly", "monthly"} or not business_date:
         raise ValueError("报告缺少合法 reportType 或 date")
-    if report_type == "weekly":
-        # 导出是最后一道确定性边界；即使报告不是由内置 builder 生成，也不能绕过工作周合同。
+    if report_type in {"weekly", "monthly"}:
+        # 导出是最后一道确定性边界；即使报告不是由内置 builder 生成，也不能绕过周期合同。
         validate_report(report)
     workspace = workspace.expanduser().resolve()
     validate_report_editorial_title(
@@ -75,8 +75,12 @@ def _artifact_name(report_type: str, business_date: str, report: Mapping[str, An
             raise ValueError("周报缺少 period.isoWeek")
         _require_match(iso_week, r"\d{4}-W\d{2}", "周报 period.isoWeek")
         return iso_week
-    _require_match(business_date, r"\d{4}-\d{2}-\d{2}", "月报 date")
-    return business_date[:7]
+    period = report.get("period")
+    month = period.get("month") if isinstance(period, Mapping) else None
+    if not isinstance(month, str):
+        raise ValueError("月报缺少 period.month")
+    _require_match(month, r"\d{4}-\d{2}", "月报 period.month")
+    return month
 
 
 def _require_match(value: str, pattern: str, field: str) -> None:

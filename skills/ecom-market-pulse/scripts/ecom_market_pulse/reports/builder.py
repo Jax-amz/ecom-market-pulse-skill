@@ -13,10 +13,16 @@ from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 from ..models import REPORT_SCHEMA_VERSION
+from ..periods import BUSINESS_TIMEZONE, REPORT_CUTOFF_TIME, calendar_month_window
 from .title_policy import validate_report_editorial_title
+from .weekly_editorial import (
+    WEEKLY_EDITORIAL_POLICY_VERSION,
+    WEEKLY_FEATURED_MAX,
+    build_weekly_editorial_brief,
+    build_weekly_theme_suggestions,
+)
 
 
-BUSINESS_TIMEZONE = "Asia/Shanghai"
 WEEKLY_BUSINESS_DAYS = 5
 CATEGORY_ORDER = (
     "amazon-policy",
@@ -94,15 +100,34 @@ def build_report_draft(
 
     if report_type not in {"daily", "weekly", "monthly"}:
         raise ValueError("report_type 仅支持 daily、weekly 或 monthly")
+    if report_type == "weekly" and report_prompt_version is None:
+        report_prompt_version = WEEKLY_EDITORIAL_POLICY_VERSION
     tz = ZoneInfo(BUSINESS_TIMEZONE)
     generated_at = (generated_at or datetime.now(tz)).astimezone(tz)
     start, end = _period_window(report_type, business_date, tz)
-    representative = select_representative_articles(articles)
+    article_candidates = [dict(article) for article in articles if _is_relevant(article)]
+    weekly_candidate_count: int | None = None
+    if report_type == "weekly":
+        selected_article_ids = _weekly_selected_article_ids(narrative)
+        editorial_brief = build_weekly_editorial_brief(
+            article_candidates,
+            selected_article_ids=selected_article_ids,
+            limit=WEEKLY_FEATURED_MAX,
+        )
+        representative = list(editorial_brief.featured_articles)
+        weekly_candidate_count = editorial_brief.candidate_count
+    else:
+        representative = select_representative_articles(article_candidates)
     sections = _build_sections(representative)
     source_directory = _build_source_directory(sources, representative)
-    report_date = start.date() if report_type == "weekly" else business_date
+    report_date = start.date() if report_type in {"weekly", "monthly"} else business_date
     report_id = f"{report_type}-{report_date.isoformat()}"
-    effective_stats = _build_stats(report_type, stats, representative)
+    effective_stats = _build_stats(
+        report_type,
+        stats,
+        representative,
+        candidate_count=weekly_candidate_count,
+    )
     report: dict[str, Any] = {
         "schemaVersion": schema_version,
         "reportId": report_id,
@@ -112,7 +137,12 @@ def build_report_draft(
         "generatedAt": generated_at.isoformat(),
         "windowStart": start.isoformat(),
         "windowEnd": end.isoformat(),
-        "lead": _build_lead(report_type, len(representative), narrative),
+        "lead": _build_lead(
+            report_type,
+            len(representative),
+            narrative,
+            candidate_count=weekly_candidate_count,
+        ),
         "stats": effective_stats,
         "sourceDirectory": source_directory,
         "sections": sections,
@@ -162,6 +192,10 @@ def apply_gate_result(report: Mapping[str, Any], gate_result: Mapping[str, Any])
         "validatedAt": gate_result.get("validatedAt"),
         "promptVersion": result["build"]["gatePromptVersion"],
     }
+    if result.get("reportType") in {"weekly", "monthly"}:
+        from ..models import validate_report
+
+        return validate_report(result).model_dump(mode="json", by_alias=True)
     return result
 
 
@@ -288,7 +322,11 @@ def _build_key_dates(sections: Iterable[Mapping[str, Any]]) -> list[dict[str, An
 
 
 def _build_stats(
-    report_type: str, stats: Mapping[str, int] | None, representative: list[dict[str, Any]]
+    report_type: str,
+    stats: Mapping[str, int] | None,
+    representative: list[dict[str, Any]],
+    *,
+    candidate_count: int | None = None,
 ) -> dict[str, int]:
     if report_type == "daily":
         defaults = {
@@ -300,7 +338,7 @@ def _build_stats(
         }
     elif report_type == "weekly":
         defaults = {
-            "uniqueEvents": len(representative),
+            "uniqueEvents": candidate_count if candidate_count is not None else len(representative),
             "sources": len({_source_id(article) for article in representative if _source_id(article)}),
             "officialSources": len(
                 {_source_id(article) for article in representative if _source_class(article) == "official"}
@@ -314,19 +352,32 @@ def _build_stats(
             "officialSources": len(
                 {_source_id(article) for article in representative if _source_class(article) == "official"}
             ),
-            "publishedReports": 0,
+            "dailyReports": 0,
         }
     if stats:
         for key in defaults:
+            if report_type == "weekly" and key == "uniqueEvents":
+                continue
             if isinstance(stats.get(key), int):
                 defaults[key] = stats[key]
     return defaults
 
 
-def _build_lead(report_type: str, included: int, narrative: Mapping[str, Any] | None) -> dict[str, str]:
+def _build_lead(
+    report_type: str,
+    included: int,
+    narrative: Mapping[str, Any] | None,
+    *,
+    candidate_count: int | None = None,
+) -> dict[str, str]:
     if narrative and isinstance(narrative.get("lead"), Mapping):
         lead = narrative["lead"]
         return {"title": str(lead.get("title") or _report_title(report_type)), "summary": str(lead.get("summary") or "")[:200]}
+    if report_type == "weekly" and candidate_count is not None:
+        return {
+            "title": _report_title(report_type),
+            "summary": f"本周跨日去重后确认 {candidate_count} 个候选事件，精选 {included} 个重点事件展示。",
+        }
     return {
         "title": _report_title(report_type),
         "summary": f"本期经去重并完成单篇分析后，纳入 {included} 个与跨境电商卖家经营相关的独立事件。",
@@ -342,18 +393,24 @@ def _weekly_extensions(
         raise ValueError("没有已确认文章时不能生成周报")
     themes = list((narrative or {}).get("themes") or [])
     if not themes:
-        themes = _fallback_themes(articles)
+        themes = build_weekly_theme_suggestions(articles)
     important = [article for article in articles if _source_class(article) == "official"]
+    recurring_signals = list((narrative or {}).get("recurringSignals") or [])
+    if not recurring_signals:
+        recurring_signals = _recurring_signal_items(articles)
+    important_changes = list((narrative or {}).get("importantChanges") or [])
+    if not important_changes:
+        important_changes = _important_change_items(important)
     return {
         "period": {
             "isoWeek": f"{iso_year}-W{iso_week:02d}",
             "startDate": start.date().isoformat(),
-            "endDate": (end - timedelta(days=1)).date().isoformat(),
+            "endDate": end.date().isoformat(),
         },
         "themes": themes,
-        "recurringSignals": _recurring_signal_items(articles),
-        "importantChanges": _important_change_items(important),
-        "nextWeekWatchlist": [],
+        "recurringSignals": recurring_signals,
+        "importantChanges": important_changes,
+        "nextWeekWatchlist": list((narrative or {}).get("nextWeekWatchlist") or []),
     }
 
 
@@ -362,9 +419,13 @@ def _monthly_extensions(
 ) -> dict[str, Any]:
     if not articles:
         raise ValueError("没有已确认文章时不能生成月报")
-    category_counts = Counter(_value(article, "primaryCategory", "primary_category") for article in articles)
     all_ids = [_article_id(article) for article in articles]
     return {
+        "period": {
+            "month": start.strftime("%Y-%m"),
+            "startDate": start.date().isoformat(),
+            "endDate": end.date().isoformat(),
+        },
         "monthLead": (narrative or {}).get("monthLead") or _build_lead("monthly", len(articles), None),
         "platformMatrix": (narrative or {}).get("platformMatrix") or _platform_matrix(articles),
         "costAndRisk": (narrative or {}).get("costAndRisk")
@@ -375,7 +436,7 @@ def _monthly_extensions(
         or _narrative_section("平台扩张、工具与自动化机会", _category_article_ids(articles, "competitor-marketplaces", "ai-ops-tools")),
         "trendEvidence": (narrative or {}).get("trendEvidence")
         or [{"trend": "本月已确认跨境电商卖家经营事件", "articleIds": all_ids, "eventCount": len(articles)}],
-        "nextMonthCalendar": [],
+        "nextMonthCalendar": list((narrative or {}).get("nextMonthCalendar") or []),
     }
 
 
@@ -435,20 +496,53 @@ def _validate_report_references(report: Mapping[str, Any]) -> None:
             if article_id in seen:
                 raise ValueError(f"报告中重复引用了文章 {article_id}")
             seen.add(article_id)
+    if report.get("reportType") != "weekly":
+        return
+
+    reference_groups = [
+        *(item.get("articleIds", []) for item in report.get("themes", [])),
+        *(item.get("articleIds", []) for item in report.get("recurringSignals", [])),
+        *(item.get("articleIds", []) for item in report.get("importantChanges", [])),
+        *(item.get("articleIds", []) for item in report.get("nextWeekWatchlist", [])),
+    ]
+    unknown = sorted(
+        {
+            str(article_id)
+            for article_ids in reference_groups
+            for article_id in article_ids
+            if article_id not in seen
+        }
+    )
+    if unknown:
+        raise ValueError(f"周报扩展字段引用了未入选文章：{', '.join(unknown)}")
+
+
+def _weekly_selected_article_ids(narrative: Mapping[str, Any] | None) -> list[str] | None:
+    if not narrative or "selectedArticleIds" not in narrative:
+        return None
+    value = narrative.get("selectedArticleIds")
+    if value is None:
+        return None
+    if not isinstance(value, list) or not all(isinstance(article_id, str) and article_id for article_id in value):
+        raise ValueError("weekly narrative.selectedArticleIds 必须是非空字符串数组")
+    return list(value)
 
 
 def _period_window(report_type: str, business_date: date, tz: ZoneInfo) -> tuple[datetime, datetime]:
+    end_time = time.min
     if report_type == "daily":
         start_date = business_date
         end_date = business_date + timedelta(days=1)
     elif report_type == "weekly":
         start_date = business_date - timedelta(days=business_date.isoweekday() - 1)
-        # 周报只汇总周一至周五的日报；半开区间结束点固定为周六 00:00。
-        end_date = start_date + timedelta(days=WEEKLY_BUSINESS_DAYS)
+        # 周五 16:00 执行截止补采后立即汇总，周末资讯归入下一业务周期。
+        end_date = start_date + timedelta(days=WEEKLY_BUSINESS_DAYS - 1)
+        end_time = REPORT_CUTOFF_TIME
     else:
-        start_date = business_date.replace(day=1)
-        end_date = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return datetime.combine(start_date, time.min, tzinfo=tz), datetime.combine(end_date, time.min, tzinfo=tz)
+        start_date, next_month = calendar_month_window(business_date)
+        end_date = next_month - timedelta(days=1)
+        end_time = REPORT_CUTOFF_TIME
+    return datetime.combine(start_date, time.min, tzinfo=tz), datetime.combine(end_date, end_time, tzinfo=tz)
 
 
 def _is_relevant(article: Mapping[str, Any]) -> bool:

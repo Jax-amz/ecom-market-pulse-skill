@@ -35,7 +35,10 @@
           "type": "string"
         },
         "schemaVersion": {
-          "const": "1.1.0",
+          "enum": [
+            "1.1.0",
+            "1.2.0"
+          ],
           "title": "Schemaversion",
           "type": "string"
         },
@@ -61,7 +64,10 @@
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
-          "const": "1.1.0",
+          "enum": [
+            "1.1.0",
+            "1.2.0"
+          ],
           "title": "Schemaversion",
           "type": "string"
         },
@@ -302,11 +308,38 @@
       "title": "Lead",
       "type": "object"
     },
+    "MonthlyPeriod": {
+      "additionalProperties": false,
+      "properties": {
+        "month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "title": "Month",
+          "type": "string"
+        },
+        "startDate": {
+          "format": "date",
+          "title": "Startdate",
+          "type": "string"
+        },
+        "endDate": {
+          "format": "date",
+          "title": "Enddate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "month",
+        "startDate",
+        "endDate"
+      ],
+      "title": "MonthlyPeriod",
+      "type": "object"
+    },
     "MonthlyReport": {
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
-          "const": "1.1.0",
+          "const": "1.2.0",
           "title": "Schemaversion",
           "type": "string"
         },
@@ -380,6 +413,9 @@
         "stats": {
           "$ref": "#/$defs/MonthlyStats"
         },
+        "period": {
+          "$ref": "#/$defs/MonthlyPeriod"
+        },
         "monthLead": {
           "$ref": "#/$defs/Lead"
         },
@@ -403,6 +439,7 @@
           "items": {
             "$ref": "#/$defs/TrendEvidence"
           },
+          "minItems": 1,
           "title": "Trendevidence",
           "type": "array"
         },
@@ -430,6 +467,7 @@
         "build",
         "reportType",
         "stats",
+        "period",
         "monthLead",
         "platformMatrix",
         "costAndRisk",
@@ -459,9 +497,9 @@
           "title": "Officialsources",
           "type": "integer"
         },
-        "publishedReports": {
+        "dailyReports": {
           "minimum": 0,
-          "title": "Publishedreports",
+          "title": "Dailyreports",
           "type": "integer"
         }
       },
@@ -469,7 +507,7 @@
         "uniqueEvents",
         "sources",
         "officialSources",
-        "publishedReports"
+        "dailyReports"
       ],
       "title": "MonthlyStats",
       "type": "object"
@@ -977,7 +1015,10 @@
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
-          "const": "1.1.0",
+          "enum": [
+            "1.1.0",
+            "1.2.0"
+          ],
           "title": "Schemaversion",
           "type": "string"
         },

@@ -292,7 +292,9 @@ Codex 主 Agent 的完整处理顺序如下：
 1. 从 `Database.list_articles_for_analysis()` 读取待分析文章。
 2. 使用 `agent_orchestrator.build_agent_task(article)` 生成只包含文章必要字段的子 Agent 任务。
 3. 子 Agent 必须只依据正文返回 JSON；主 Agent 使用 `validate_agent_output(payload)` 校验合同后，才调用 `Database.upsert_analysis(...)` 记录结果。
-4. 从已完成、相关文章分析中按统计周期读取数据，调用 `reports.builder.build_report_draft(...)` 构建草稿。
+4. 从已完成、相关文章分析中按统计周期读取数据。周报先调用
+   `reports.build_weekly_editorial_brief(...)` 完成跨日同事件归并和重点展示推荐，
+   再调用 `reports.builder.build_report_draft(...)` 构建草稿；月报直接回事实层聚类。
 5. 主 Agent 结合 `reports.builder.collect_evidence(...)` 对完整草稿和证据做最终关门校验，并通过 `apply_gate_result(...)` 写入 `passed` 或 `rejected` 结果。
 6. 仅当状态为 `passed`，才调用 `exporters.report_exporter.export_passed_report(...)` 写出 JSON；若需要人读版，再同时生成 Markdown。
 
@@ -303,6 +305,21 @@ Codex 主 Agent 的完整处理顺序如下：
 - 无关文章只返回排除原因，不能伪造分类；
 - 未通过关门验证的报告只能留在审计库中，不能导出或发布；
 - 具体 JSON 字段以 [output-contract.md](skills/ecom-market-pulse/references/output-contract.md) 和 `assets/schemas/` 为准。
+
+周报和月报使用业务截止口径：周报在周五 16:00、月报在每月最后一个自然日 16:00 先执行增量采集，再生成正式报告。周五增量需要刷新当天日报；月末落在周末时不虚构周末日报，新增文章直接进入月报候选事实层。截止点之后首次发现的资讯顺延到下一业务周期。
+
+周报不会完整复制五份日报。跨日去重后的数量写入 `stats.uniqueEvents`，公开
+`sections` 只展示 12～20 个代表事件且最多 20 个；候选不足 20 个时全部展示。
+每个候选非空分类至少保留一个代表事件，未入选事实继续保留在日报与 DuckDB。
+
+月报直接汇总该月周一至周五的合格日报与月末截止增量事实并回到文章事实层去重，不从周报二次提炼；任一工作日日报缺失时先补跑，不能生成残缺月报。2026 年 7 月的归档日期范围为 `2026-07-01 ～ 2026-07-31`，预期 `stats.dailyReports = 23`，数据截止点为 `2026-07-31T16:00:00+08:00`，导出路径为 `monthly/2026-07.json`。
+
+```text
+请使用 $ecom-market-pulse Skill 生成本月业务截止月报：
+在每月最后一个自然日 16:00 执行截止增量采集，核对目标月全部周一至周五日报，
+缺失则逐日补跑；从日报和截止增量对应的文章事实层重新聚类去重，
+完成月度关门验证后导出 monthly/YYYY-MM.json。不要用周报二次汇总，也不要发布未通过的草稿。
+```
 
 ## Codex 定时任务与手动备用
 

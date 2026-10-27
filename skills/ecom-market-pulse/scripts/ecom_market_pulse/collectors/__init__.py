@@ -2,6 +2,7 @@
 
 from .base import DiscoveredItem, PublicHttpFetcher, RawArticle, SourceAdapter
 from .amz123 import Amz123MorningNewsAdapter
+from .amz123_flash import Amz123FlashNewsAdapter
 from .amazon_ads import AmazonAdsWhatsNewAdapter
 from .amazon_global_selling import AmazonGlobalSellingNewsAdapter
 from .html import HtmlSourceAdapter
@@ -13,6 +14,7 @@ ADAPTERS: dict[str, type[SourceAdapter]] = {
     "html": HtmlSourceAdapter,
     "sitemap": SitemapSourceAdapter,
     "amz123-zb": Amz123MorningNewsAdapter,
+    "amz123-kx": Amz123FlashNewsAdapter,
     "amazon-global-selling-cn": AmazonGlobalSellingNewsAdapter,
     "amazon-ads-whats-new": AmazonAdsWhatsNewAdapter,
 }
@@ -30,6 +32,7 @@ __all__ = [
     "ADAPTERS",
     "AmazonAdsWhatsNewAdapter",
     "Amz123MorningNewsAdapter",
+    "Amz123FlashNewsAdapter",
     "AmazonGlobalSellingNewsAdapter",
     "DiscoveredItem",
     "HtmlSourceAdapter",

@@ -535,6 +535,54 @@
       "title": "NarrativeSection",
       "type": "object"
     },
+    "PartialWeeklyInputCoverage": {
+      "additionalProperties": false,
+      "description": "仅供用户明确允许按缺失日报发布时记录实际输入与授权。",
+      "properties": {
+        "mode": {
+          "const": "user-authorized-partial",
+          "title": "Mode",
+          "type": "string"
+        },
+        "includedDailyDates": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Includeddailydates",
+          "type": "array"
+        },
+        "missingDailyDates": {
+          "items": {
+            "format": "date",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Missingdailydates",
+          "type": "array"
+        },
+        "authorization": {
+          "minLength": 1,
+          "title": "Authorization",
+          "type": "string"
+        },
+        "authorizedAt": {
+          "format": "date-time",
+          "title": "Authorizedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "includedDailyDates",
+        "missingDailyDates",
+        "authorization",
+        "authorizedAt"
+      ],
+      "title": "PartialWeeklyInputCoverage",
+      "type": "object"
+    },
     "PlatformMatrixEntry": {
       "additionalProperties": false,
       "properties": {
@@ -1094,6 +1142,17 @@
         },
         "period": {
           "$ref": "#/$defs/ReportPeriod"
+        },
+        "inputCoverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartialWeeklyInputCoverage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "themes": {
           "items": {

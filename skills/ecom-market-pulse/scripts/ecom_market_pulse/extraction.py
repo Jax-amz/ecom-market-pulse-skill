@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from typing import Any
 
 from .collectors.base import RawArticle, source_value
-from .normalization import detect_language_from_text, normalize_datetime, normalize_language, normalize_text, normalize_url
+from .normalization import detect_language_from_text, normalize_article_main_text, normalize_datetime, normalize_language, normalize_text, normalize_url
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,7 @@ def extract_article(raw: RawArticle, source: Any | None = None) -> ExtractedArti
         version = "beautifulsoup4-fallback"
 
     canonical_url = normalize_url(metadata.canonical_url or raw.item.canonical_url_hint or raw.final_url or raw.request_url)
+    extracted_text = normalize_article_main_text(extracted_text, canonical_url or raw.request_url)
     original_title = metadata.title or raw.item.title_hint
     title = normalize_text(original_title) or None
     language = normalize_language(metadata.language) or normalize_language(source_value(source, "content.language", None))
@@ -92,6 +94,7 @@ def _extract_metadata(html: str, base_url: str, timezone: str) -> _Metadata:
         _meta_value(soup, "article:published_time")
         or _meta_value(soup, "datePublished")
         or _meta_value(soup, "date")
+        or _jsonld_published_time(soup, normalize_url(canonical, base_url) or base_url)
         or _time_value(soup)
     )
     language = soup.html.get("lang") if soup.html else None
@@ -102,6 +105,32 @@ def _extract_metadata(html: str, base_url: str, timezone: str) -> _Metadata:
         published_at=normalize_datetime(published_raw, timezone),
         language=language,
     )
+
+
+def _jsonld_published_time(soup: Any, article_url: str) -> str | None:
+    """只取当前文章的 datePublished，尊重显式时区，不用更新日期或侧栏时间。"""
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            document = json.loads(script.get_text())
+        except (ValueError, TypeError):
+            continue
+        nodes = document if isinstance(document, list) else document.get("@graph", [document]) if isinstance(document, dict) else []
+        if not isinstance(nodes, list):
+            continue
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            types = node.get("@type", [])
+            types = [types] if isinstance(types, str) else types
+            if not isinstance(types, list) or not any(isinstance(kind, str) and kind in {"Article", "NewsArticle", "BlogPosting"} for kind in types):
+                continue
+            node_url = node.get("url") or node.get("@id")
+            if isinstance(node_url, str) and normalize_url(node_url, article_url) != normalize_url(article_url):
+                continue
+            published = node.get("datePublished")
+            if isinstance(published, str) and normalize_datetime(published) is not None:
+                return published
+    return None
 
 
 def _extract_with_trafilatura(html: str) -> tuple[str | None, str, str]:

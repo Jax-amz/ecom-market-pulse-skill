@@ -14,26 +14,49 @@ description: 采集指定公开信源文章；由 Codex 主 agent 调度结构�
 3. 用户只要求解读已有文章时，不启动网络采集。
 4. 分析由当前 Codex 主 agent 并行派发子 agent；每篇只接受符合 `analysis_contract.py` 的 JSON，再由主 agent 校验并落库。
 
+## 日报、周报、月报共用的固定流程
+
+- 用户于2026年10月15日要求沿用当天验证通过的流程。三个周期均使用同一份工作区配置，固定启用 `amz123-kx`（AMZ123 跨境快讯，`https://www.amz123.com/kx`），保留 `amz123-zb` 早报与其他既有信源；快讯不是一次性试采或只供日报使用。预检发现快讯入口缺失或停用时，应报告配置异常，不能静默只采早报后声称完整完成。
+- 日报使用下节规定的近24小时窗口；周报与月报的截止增量也必须采集快讯入口，继续遵守各自16:00截止和截止后顺延规则。周报从合格日报与刷新后的周五日报归并，月报从合格日报和月末截止增量事实归并，不忽略 `amz123-kx` 的文章。
+- 所有周期的配置/结构预检均使用 `--no-initialize`，数据库连接使用 `Database(initialize=False)`，沿用现有结构。每次新增采集后执行 `prepare-analysis`，仅派发该批次 `taskFile` 中的任务；周月汇总复用已完成分析，不将全部周期或历史文章重新送模型。
+- 主 Agent 逐篇核对相关性、首次披露、同事件和证据边界。没有官方公告链接不能单独成为排除理由；可追溯的本期媒体新披露可以标注“据报”并限定范围。发生日期、原始披露日期和本期转述日期分别核对，旧咨询或旧背景不能单独否定报道中的新进展；明确旧闻、无关内容、同事件重述与证据不足必须分别记录。
+- 同 URL/同主文复用事实及分析，不同 URL 的同事件按语义归并。早报与快讯是同一媒体的两个入口，不计为相互独立的佐证。提案不写成已生效，个案/单品/样本数据不外推为全平台规则、行业整体或利润，无法确定的生效时刻和期限保留为空。
+- 每次反馈分别列出实际扫描窗口、发现/抓取链接、采集阶段重复、模型前旧闻/重复预排除、实际新模型分析、复用分析、分析后排除原因、合格独立事件及展示数量；失败或中断批次另列，不能混入成功批次统计。处理方式沿用本次，不固定任何采集量或入选条数。
+- 正式导出和发布只接受 `gate.status=passed`、`gate.issues=[]` 且周期合同正确的报告。报告先上传，核本地、远端与公网字节/哈希一致后，最后原子上传 manifest；已有日报需要更新时保留旧修订并重新关门。
+
+## 常规日报采集与分析范围
+
+- 常规日报固定使用 `collect --since 24h --no-initialize`，沿用现有库表。不因周末、漏跑或上期日期较早自动退回前几天零点；扩大窗口补采须由用户另行明确要求，并单独披露时间和早报批次数。
+- `amz123-kx` 从跨境快讯公开列表补充早报选编之外的文章。按逐篇 Unix 发布时间限定窗口，核对接口的窗口总条数；缺失、截断或超过配置上限须报错，不能仅取首页冒充完整采集。早报与快讯同 URL、同主文复用既有事实和分析，不计为两个事件；不同 URL 的同事件仍须主 Agent 归并。两者均为 AMZ123 专业媒体来源，不视作相互独立佐证。
+- 沿用旧库结构时，快讯在 `sources.adapter_type` 中使用兼容的 `html` 标签，实际适配器仍以 `sources.config_json.discovery.type = amz123-kx` 及运行配置为准；采集派发不读取此兼容标签，不为增加入口执行数据库迁移。
+- 采集去重必须比较主文，兼容历史快照中的推荐尾栏；侧栏变化不新增正文版本，主文确有变化则保留。不要改写历史抓取和分析计数。
+- 发布时间优先取当前文章的结构化 `datePublished`，尊重显式 UTC/时区；不得把 `dateModified`、相对时间标签或无时区的页面钟点强行当作北京时间。AMZ123结构化时间与原始Unix时间戳一致时，按UTC换算；About Amazon主文前的“几小时前”动态标签不参与去重。
+- 采集后先执行 `prepare-analysis --run-id <采集批次ID>`，仅把返回的 `taskFile` 内容派发给子 Agent。主文未变、已完成分析和确定的旧闻先行排除；排除清单不算本次模型分析，已完成结果可复用。聚合早报日期不能充当原发时间，日期不确定时仍交主 Agent 核查。
+- 对用户分别汇报扫描时间范围、发现链接数、重复/旧闻预排除数、实际新调用模型的文章数和最终合格事件数；不将补采量或正文版本量描述成今天新增资讯。
+
 ## 日报标题与关门
 
 1. 选出代表文章后，读取 [editorial-title-policy.md](references/editorial-title-policy.md)。
 2. 从卖家影响最大的事件中选择一个主事件，可再选择一个不同维度的次事件；生成具体对象加方向动词的新闻编辑式标题，并写入 `narrative.lead.title`。
 3. 从现有 `exports/manifest.json` 读取最近七个日报标题，避免重复事件切入点和句式。
 4. 在批准 `gate.status = passed` 前调用 `validate_report_editorial_title`；把返回的任何问题视为关门失败，重新拟题后再验证。不得用默认报告名、分类堆砌或公文式风险提示绕过校验。
+5. 完整采集后确无合格新增时，按标题规范的零事件规则生成如实的日报；主 Agent 必须确认全部启用信源采集完成、没有未处理失败，摘要保留排除原因，不能用其他日期资讯填充。
+6. `stats.uniqueEvents` 按通过相关性、时效和证据审核后的合格事件归并结果计数，与日报全部代表文章数量一致；不要直接使用正文版本数或原始阶段事件键数量。摘要最多200字符，必须完整表达句意，超长应重写，不得截断后批准关门。
 
 ## 周报固定合同
 
 1. 读取 [output-contract.md](references/output-contract.md) 和 [weekly-editorial-policy.md](references/weekly-editorial-policy.md)；定时任务在周五 16:00 生成本周周报。手动运行选择最近一个已经到达周五 16:00 截止点的工作周，或用户明确指定的历史工作周。
-2. 周报汇总周一至周五 5 份日报。每份日报都必须日期匹配、`gate.status = passed`、`gate.issues = []`；缺失时补跑该日期，不能用 `latest.json`、周末或其他日期替代。
+2. 周报默认汇总周一至周五 5 份日报。每份日报都必须日期匹配、`gate.status = passed`、`gate.issues = []`；缺失时补跑该日期，不能用 `latest.json`、周末或其他日期替代。用户明确允许部分输入时按第12条记录例外。
 3. 周五 16:00 先执行截止增量采集，覆盖周五上午日报生成后至 16:00 的新增资讯；发现新文章时必须重新分析并重建周五日报，不能因为上午版本已经 `passed` 就跳过。
 4. 固定输出 `date = period.startDate = 周一`、`period.endDate = 周五`、`windowStart = 周一 00:00:00+08:00`、`windowEnd = 周五 16:00:00+08:00`。`period.isoWeek` 只用于文件名 `weekly/YYYY-Www.json`。
 5. 归档名称不展示 ISO 周。以周一 `period.startDate` 在所属月份的位置计算：`第X周`，其中 `X = ((day - 1) // 7) + 1`；例如 `2026-07-20` 必须显示“第3周”。报告正文日期范围直接显示 `period.startDate ～ period.endDate`。
-6. 最终关门必须确认 `stats.dailyReports = 5`、`generatedAt >= windowEnd`、`gate.validatedAt >= windowEnd`、日期合同一致且所有主题都有入选文章依据。导出器会再次执行同一合同校验。
+6. 最终关门默认必须确认 `stats.dailyReports = 5`；第12条例外按实际数量核验。还须确认 `generatedAt >= windowEnd`、`gate.validatedAt >= windowEnd`、日期合同一致且所有主题都有入选文章依据。导出器会再次执行同一合同校验。
 7. 周五 16:00 之后及周末首次发现的资讯归入下一业务周的首个合格日报，不能丢弃或回写到已发布周报。
 8. 完成交付时必须明确输出：`归档：第X周`、`日期范围：YYYY-MM-DD ～ YYYY-MM-DD`、`数据截止：周五 16:00`，并附本地 JSON 路径和 gate 状态。
 9. 五份日报只组成候选集；周报必须先执行不依赖发布日期的跨日 `same-event` 归并，再生成重点展示集。`stats.uniqueEvents` 记录去重后的候选事件数，`sections` 只放重点展示事件。
 10. 候选事件不超过 20 个时全部展示；超过 20 个时展示 12～20 个，默认上限 20。每个候选非空分类至少保留一个代表事件；同一主题族不得继续无上限铺陈。
 11. 主 Agent 如提交 `narrative.selectedArticleIds`，只能引用候选集 articleId，并必须通过数量、重复 ID、分类覆盖和全部周报扩展字段引用校验；自动推荐结果也执行同一约束。
+12. 用户在当前对话明确允许基于已有日报继续生成发布时，可使用 `inputCoverage.mode = user-authorized-partial` 记录这次例外：完整列明本周已纳入及缺失日期、授权原文与时间，`stats.dailyReports` 按真实数量填写，摘要披露覆盖比例和全部缺失日期。此授权仅放宽日报齐全要求；周期、截止补采、时间、证据、引用、关门和发布校验仍须通过。不得自动推断授权或伪造缺失日报。
 
 ## 月报固定合同
 
@@ -50,8 +73,9 @@ description: 采集指定公开信源文章；由 Codex 主 agent 调度结构�
 ## 命令
 
 ```bash
-python skills/ecom-market-pulse/scripts/pulse.py validate-config --workspace ./runtime
-python skills/ecom-market-pulse/scripts/pulse.py collect --workspace ./runtime --since 24h
+python skills/ecom-market-pulse/scripts/pulse.py validate-config --workspace ./runtime --no-initialize
+python skills/ecom-market-pulse/scripts/pulse.py collect --workspace ./runtime --since 24h --no-initialize
+python skills/ecom-market-pulse/scripts/pulse.py prepare-analysis --workspace ./runtime --run-id <采集批次ID>
 ```
 
 辅助命令：`schema-check`。
@@ -63,7 +87,7 @@ python skills/ecom-market-pulse/scripts/pulse.py collect --workspace ./runtime -
 - 主 agent 核对文章证据与日报引用后才批准导出。
 - 日报标题未通过编辑规范时必须拒绝关门；导出器会再次校验标题及最近七期相似度。
 - 构建日报、周报或月报时，必须从当前配置中全部 `enabled: true` 的信源生成 `sourceDirectory`；按最终纳入 `sections` 的代表文章计数，`0` 篇仅表示本期未纳入，且信源名称链接必须使用配置的 `homepage_url`。
-- 周报交付必须同时报告“第X周”和周一至周五的日期范围；若任一日期字段或 5 份日报覆盖不满足固定合同，必须拒绝导出。
-- 周报/月报都必须先做 16:00 截止增量采集；截止点尚未到达、日报缺失或引用不合法时必须拒绝导出。
+- 周报交付必须同时报告“第X周”和周一至周五的日期范围；日期字段不符合固定合同必须拒绝导出，日报覆盖仅可使用周报第12条明确授权例外。
+- 周报/月报都必须先做 16:00 截止增量采集；截止点尚未到达、日报缺失且无适用授权例外或引用不合法时必须拒绝导出。
 - 月报交付必须报告自然月日期范围、月末 16:00 截止点和工作日日报覆盖数。
 - 完成后报告时间窗口、实际信源、发现/去重/分析/草稿/关门结果和绝对导出路径。

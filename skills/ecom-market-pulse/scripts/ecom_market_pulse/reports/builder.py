@@ -165,6 +165,8 @@ def build_report_draft(
     }
     if report_type == "weekly":
         report.update(_weekly_extensions(start, end, representative, narrative))
+        if (narrative or {}).get("inputCoverage") is not None:
+            report["inputCoverage"] = narrative["inputCoverage"]
     elif report_type == "monthly":
         report.update(_monthly_extensions(start, end, representative, narrative))
     _validate_report_references(report)
@@ -356,6 +358,9 @@ def _build_stats(
         }
     if stats:
         for key in defaults:
+            if report_type == "daily" and key in {"uniqueEvents", "included"}:
+                # 日报展示全部合格事件；原始抓取版本数不能覆盖业务去重结果。
+                continue
             if report_type == "weekly" and key == "uniqueEvents":
                 continue
             if isinstance(stats.get(key), int):
@@ -372,7 +377,7 @@ def _build_lead(
 ) -> dict[str, str]:
     if narrative and isinstance(narrative.get("lead"), Mapping):
         lead = narrative["lead"]
-        return {"title": str(lead.get("title") or _report_title(report_type)), "summary": str(lead.get("summary") or "")[:200]}
+        return {"title": str(lead.get("title") or _report_title(report_type)), "summary": str(lead.get("summary") or "")}
     if report_type == "weekly" and candidate_count is not None:
         return {
             "title": _report_title(report_type),

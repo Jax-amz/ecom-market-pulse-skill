@@ -85,6 +85,17 @@ def content_sha256(value: str | None) -> str:
     return hashlib.sha256(normalize_text(value).encode("utf-8")).hexdigest()
 
 
+def normalize_article_main_text(value: str | None, canonical_url: str) -> str:
+    """剔除已知站点的推荐尾栏与动态时间标签，兼容历史全文快照。"""
+    text = normalize_text(value)
+    hostname = urlsplit(canonical_url).hostname
+    if hostname in {"amz123.com", "www.amz123.com"}:
+        text = text.split("AMZ123跨境卖家导航旗下公众号", 1)[0].strip()
+    elif hostname in {"aboutamazon.com", "www.aboutamazon.com"}:
+        text = re.sub(r"^\d+\s+(?:minutes?|hours?|days?|weeks?|months?|years?)\s+ago\s+", "", text, flags=re.IGNORECASE)
+    return text
+
+
 def raw_sha256(value: bytes | None) -> str:
     """返回原始响应体的 SHA-256 十六进制摘要。"""
     return hashlib.sha256(value or b"").hexdigest()

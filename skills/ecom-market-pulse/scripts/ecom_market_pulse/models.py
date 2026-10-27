@@ -112,6 +112,7 @@ class SourceType(StrEnum):
     HTML = "html"
     SITEMAP = "sitemap"
     AMZ123_ZB = "amz123-zb"
+    AMZ123_KX = "amz123-kx"
     AMAZON_GLOBAL_SELLING_CN = "amazon-global-selling-cn"
     AMAZON_ADS_WHATS_NEW = "amazon-ads-whats-new"
 
@@ -471,10 +472,21 @@ class WatchlistItem(ContractModel):
     article_ids: list[str] = Field(..., alias="articleIds")
 
 
+class PartialWeeklyInputCoverage(ContractModel):
+    """仅供用户明确允许按缺失日报发布时记录实际输入与授权。"""
+
+    mode: Literal["user-authorized-partial"]
+    included_daily_dates: list[date] = Field(..., alias="includedDailyDates", min_length=1)
+    missing_daily_dates: list[date] = Field(..., alias="missingDailyDates", min_length=1)
+    authorization: str = Field(..., min_length=1)
+    authorized_at: datetime = Field(..., alias="authorizedAt")
+
+
 class WeeklyReport(ReportBase):
     report_type: Literal[ReportType.WEEKLY] = Field(..., alias="reportType")
     stats: WeeklyStats
     period: ReportPeriod
+    input_coverage: PartialWeeklyInputCoverage | None = Field(None, alias="inputCoverage")
     themes: list[ReportTheme] = Field(..., min_length=3, max_length=8)
     recurring_signals: list[RecurringSignal] = Field(..., alias="recurringSignals")
     important_changes: list[ImportantChange] = Field(..., alias="importantChanges")
@@ -512,7 +524,9 @@ class WeeklyReport(ReportBase):
             raise ValueError("1.2.0 周报 windowEnd 必须是周五 16:00:00+08:00")
         if self.schema_version == REPORT_SCHEMA_VERSION and self.build.data_cutoff_at != expected_window_end:
             raise ValueError("1.2.0 周报 build.dataCutoffAt 必须等于 windowEnd")
-        if self.gate.status is GateStatus.PASSED and self.stats.daily_reports != 5:
+        if self.input_coverage is not None:
+            self._validate_partial_input_coverage()
+        elif self.gate.status is GateStatus.PASSED and self.stats.daily_reports != 5:
             raise ValueError("通过关门验证的周报必须汇总 5 份工作日日报")
         if self.schema_version == REPORT_SCHEMA_VERSION and self.gate.status is GateStatus.PASSED:
             if (
@@ -550,6 +564,30 @@ class WeeklyReport(ReportBase):
             if unknown_ids:
                 raise ValueError(f"周报扩展字段引用了未入选文章：{', '.join(unknown_ids)}")
         return self
+
+    def _validate_partial_input_coverage(self) -> None:
+        coverage = self.input_coverage
+        assert coverage is not None
+        if self.schema_version != REPORT_SCHEMA_VERSION:
+            raise ValueError("部分输入周报必须使用当前报告合同")
+        included = coverage.included_daily_dates
+        missing = coverage.missing_daily_dates
+        expected = {self.period.start_date + timedelta(days=offset) for offset in range(5)}
+        if (
+            included != sorted(set(included))
+            or missing != sorted(set(missing))
+            or set(included) & set(missing)
+            or set(included) | set(missing) != expected
+        ):
+            raise ValueError("部分输入周报必须完整列明本周五个日期，已纳入与缺失日期不得重复")
+        if self.stats.daily_reports != len(included):
+            raise ValueError("部分输入周报 stats.dailyReports 必须等于实际日报数量")
+        if coverage.authorized_at.utcoffset() is None or coverage.authorized_at > self.generated_at:
+            raise ValueError("部分输入周报必须记录生成前的明确授权时间")
+        if f"{len(included)}/5" not in self.lead.summary or any(
+            value.isoformat() not in self.lead.summary for value in missing
+        ):
+            raise ValueError("部分输入周报摘要必须披露实际覆盖比例及每个缺失日期")
 
 
 class NarrativeSection(ContractModel):

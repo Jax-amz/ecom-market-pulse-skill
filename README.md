@@ -4,7 +4,7 @@
 
 它不做新闻搬运站，也不试图用一段没有来源的 AI 总结替代判断：系统把公开信源中的文章采集到本地 DuckDB，保留原始抓取记录、正文版本和来源 URL；后续由 Codex 主 Agent 调度子 Agent 做结构化解读，并在报告导出前执行最终关门校验。每条进入报告的结论都应能回溯到具体原文和处理记录。
 
-> 当前版本：`0.1.0`。这是一个 **Codex Skill**，推荐部署到 Codex 并通过 Codex 的主 Agent 执行；Python 脚本是 Skill 的运行实现，不是面向业务用户的首选操作入口。稳定 CLI 已支持配置校验、公开资讯采集与数据库结构校验；文章 AI 解读、日报/周报/月报草稿、关门验证和受控导出已提供为 Python 模块。部署前请先阅读下方的[当前能力边界](#当前能力边界)。
+> 当前版本：`0.1.0`。这是一个 **Codex Skill**，推荐部署到 Codex 并通过 Codex 的主 Agent 执行；Python 脚本是 Skill 的运行实现，不是面向业务用户的首选操作入口。稳定 CLI 已支持配置校验、公开资讯采集、分析前任务过滤与数据库结构校验；文章 AI 解读、日报/周报/月报草稿、关门验证和受控导出已提供为 Python 模块。部署前请先阅读下方的[当前能力边界](#当前能力边界)。
 
 ## 目录
 
@@ -41,7 +41,7 @@
 | 能力 | 说明 |
 | --- | --- |
 | 配置校验 | 在采集前校验 YAML、时区、信源 ID、公开 URL、采集参数和分类提示。 |
-| 公开信源采集 | 内置 RSS/Atom、普通 HTML 列表、Sitemap，以及 Amazon 全球开店中国站、Amazon Ads What's New、AMZ123 跨境早报适配器。 |
+| 公开信源采集 | 内置 RSS/Atom、普通 HTML 列表、Sitemap，以及 Amazon 全球开店中国站、Amazon Ads What's New、AMZ123 跨境早报与跨境快讯适配器。 |
 | 合规抓取 | 按单域名限速、超时和有限重试；遇到 401、403、登录页或验证码不绕过、不重试规避。 |
 | 正文提取与规范化 | 提取标题、作者、发布时间、canonical URL、正文和 HTML，保留原始响应审计记录。 |
 | 幂等去重 | 以 `canonical URL + 正文哈希` 去重，并生成事件键，重复运行不会重复写入相同文章版本。 |
@@ -67,6 +67,7 @@
 | `validate-config` | 由 Codex 在执行前调用的底层校验命令；也可在开发排障时手动运行。 |
 | `collect` | 由 Codex Skill 调用的底层采集命令，执行发现、抓取、提取、去重和落库，不调用任何模型 API。 |
 | `schema-check` | 由 Codex 调用的底层数据库结构校验命令；也可用于开发排障。 |
+| `prepare-analysis` | 只读整理一个已完成采集批次的任务，先排除主文未变、已完成分析及确定的旧闻，输出待调用模型的任务与排除清单。 |
 | 子 Agent 调用 | 由 Codex 主 Agent 调度；提供任务构建、返回值校验和数据库接口，子 Agent 不直接写库或发布。 |
 | 日报/周报/月报 | 提供构建、关门结果合并、受控导出模块；目前没有 `build`、`retry` 或“一键全流程” CLI。 |
 | Web 管理后台、用户权限、订阅推送 | 本期不提供。 |
@@ -201,6 +202,7 @@ sources:
 | `amazon-global-selling-cn` | Amazon 全球开店中国站新闻 | 使用示例配置中的公开入口。 |
 | `amazon-ads-whats-new` | Amazon Ads What's New | 使用示例配置中的公开入口。 |
 | `amz123-zb` | AMZ123 跨境早报 | 使用示例配置中的公开入口。 |
+| `amz123-kx` | AMZ123 跨境快讯完整时间流 | 使用公开时间范围接口，逐篇 Unix 时间过滤；核对返回总数，超过 `max_items` 时拒绝静默截断。 |
 
 新增 HTML 信源的示例：
 
@@ -269,7 +271,13 @@ sources:
 按卖家经营影响做结构化解读。不要启动新的网络采集；所有事实必须保留 sourceUrl 证据。
 ```
 
-同一工作区可被 Codex 反复使用。相同 `canonical URL + content SHA-256` 的文章会被视为重复；网页正文改变时，系统会保存为新的文章版本，便于追溯内容修订。
+同一工作区可被 Codex 反复使用。相同 `canonical URL + 主文 SHA-256` 的文章会被视为重复；AMZ123 推荐尾栏不参与主文哈希，历史全文版本也会按相同主文规则匹配。主文改变时仍保存新版本，便于追溯内容修订。
+
+常规日报使用 `collect --since 24h --no-initialize`，不因周末或漏跑自行扩大窗口。采集后执行 `prepare-analysis --workspace ./runtime --run-id <采集批次ID>`，只派发输出的待分析任务；预排除清单和已完成结果保留供复核。配置和结构预检可加 `--no-initialize` 沿用现有表结构。
+
+日报、周报、月报固定共用同一份信源配置，启用 AMZ123 跨境快讯 `amz123-kx`，保留早报与其他既有信源；周五及月末16:00截止增量也必须覆盖快讯。两入口相同主文复用已有事实与分析，不同链接的同事件再按语义归并，不能当成独立媒体相互佐证。周月报告复用已完成分析，只把当前新增采集批次的待分析任务送模型。
+
+主 Agent 审核时区分本期新披露、明确旧闻、同事件、无关内容和证据不足。可追溯的新媒体报道可保留“据报”与适用范围，不因缺少官方链接就直接排除；旧背景也不能否定新进展。每期分别披露扫描窗口、发现/抓取、采集重复、模型前预排除、实际新分析、复用、分析后排除及合格事件数，采集量和入选条数均按实际结果记录。
 
 ### 让 Codex 查看审计数据
 
@@ -289,8 +297,8 @@ sources:
 
 Codex 主 Agent 的完整处理顺序如下：
 
-1. 从 `Database.list_articles_for_analysis()` 读取待分析文章。
-2. 使用 `agent_orchestrator.build_agent_task(article)` 生成只包含文章必要字段的子 Agent 任务。
+1. 对本次采集批次执行 `prepare-analysis`，先过滤主文未变、已完成分析和确定的旧闻，不扫描全部历史文章重新分析。
+2. 只派发 `taskFile` 中的子 Agent 任务；任务由 `agent_orchestrator.build_agent_task(article)` 生成，已剔除已知推荐尾栏。原发时间无法确定的聚合文章仍须由主 Agent 核查。
 3. 子 Agent 必须只依据正文返回 JSON；主 Agent 使用 `validate_agent_output(payload)` 校验合同后，才调用 `Database.upsert_analysis(...)` 记录结果。
 4. 从已完成、相关文章分析中按统计周期读取数据。周报先调用
    `reports.build_weekly_editorial_brief(...)` 完成跨日同事件归并和重点展示推荐，
@@ -409,7 +417,7 @@ python skills/ecom-market-pulse/scripts/pulse.py collect --workspace ./runtime -
 
 ### 为什么 `pulse.py build` 或 `retry` 不可用？
 
-它们出现在完整技术设计的规划中，但当前 CLI 尚未实现。当前可用命令只有 `validate-config`、`collect` 与 `schema-check`。正式报告应通过上文的 Agent 编排与报告模块接入，或先完成对应 CLI 的实现。
+它们出现在完整技术设计的规划中，但当前 CLI 尚未实现。当前可用命令为 `validate-config`、`collect`、`prepare-analysis` 与 `schema-check`。正式报告应通过上文的 Agent 编排与报告模块接入，或先完成对应 CLI 的实现。
 
 ### 我可以直接把原文导出为日报吗？
 

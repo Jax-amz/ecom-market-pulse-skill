@@ -92,7 +92,18 @@ def report_editorial_title_issues(
 
     items = _report_items(report)
     if not items:
-        issues.append("日报没有纳入事件，无法生成编辑标题")
+        stats = report.get("stats")
+        directory = report.get("sourceDirectory")
+        has_zero_counts = (
+            isinstance(stats, Mapping)
+            and stats.get("included") == 0
+            and stats.get("uniqueEvents") == 0
+            and isinstance(directory, list)
+            and bool(directory)
+            and all(isinstance(source, Mapping) and source.get("articleCount") == 0 for source in directory)
+        )
+        if not has_zero_counts or "暂无合格新增资讯" not in title:
+            issues.append("零事件日报必须统计与目录均为零，标题明确暂无合格新增资讯")
     elif not _is_grounded_in_items(title, items):
         issues.append("标题必须包含至少一个可回溯到入选事件的具体对象或变化")
     if items and not _has_official_source(items) and any(fragment in title for fragment in STRONG_ASSERTION_FRAGMENTS):

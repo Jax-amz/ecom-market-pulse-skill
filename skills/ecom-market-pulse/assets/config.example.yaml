@@ -36,6 +36,15 @@ sources:
     category_hints: [amazon-policy]
     fetch: {interval_minutes: 240, requests_per_minute: 4, timeout_seconds: 20, max_retries: 2}
     content: {language: zh, timezone: Asia/Shanghai}
+  - id: amz123-kx
+    name: AMZ123 跨境快讯
+    enabled: true
+    source_class: professional-media
+    homepage_url: https://www.amz123.com/kx
+    discovery: {type: amz123-kx, url: https://www.amz123.com/kx, max_items: 500}
+    category_hints: [amazon-policy, competitor-marketplaces]
+    fetch: {interval_minutes: 240, requests_per_minute: 4, timeout_seconds: 20, max_retries: 2}
+    content: {language: zh, timezone: Asia/Shanghai}
   - id: amazon-ads-whats-new
     name: Amazon Ads What's New
     enabled: true

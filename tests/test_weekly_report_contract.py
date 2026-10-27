@@ -113,6 +113,49 @@ def test_export_rechecks_weekly_workday_contract(tmp_path) -> None:
         export_passed_report(report, tmp_path)
 
 
+def _authorized_partial_weekly() -> dict[str, object]:
+    report = _weekly_draft(daily_reports=3)
+    report["inputCoverage"] = {
+        "mode": "user-authorized-partial",
+        "includedDailyDates": ["2026-07-22", "2026-07-23", "2026-07-24"],
+        "missingDailyDates": ["2026-07-20", "2026-07-21"],
+        "authorization": "用户明确要求按已有三份日报继续生成并发布",
+        "authorizedAt": "2026-07-24T16:05:00+08:00",
+    }
+    report["lead"]["summary"] = "本期日报覆盖3/5，缺失2026-07-20、2026-07-21；按用户明确授权发布已有资讯。"
+    report["gate"] = {
+        "status": "passed", "issues": [],
+        "validatedAt": "2026-07-24T16:30:00+08:00",
+        "promptVersion": "weekly-report-gate-v1",
+    }
+    return report
+
+
+def test_authorized_partial_weekly_exports_actual_coverage(tmp_path) -> None:
+    report = _authorized_partial_weekly()
+    assert validate_report(report).stats.daily_reports == 3
+    assert export_passed_report(report, tmp_path)["json"].name == "2026-W30.json"
+
+
+@pytest.mark.parametrize("defect", ["count", "duplicate", "outside", "undisclosed", "future_authorization", "cutoff"])
+def test_partial_weekly_cannot_hide_missing_inputs_or_bypass_cutoff(defect) -> None:
+    report = _authorized_partial_weekly()
+    if defect == "count":
+        report["stats"]["dailyReports"] = 5
+    elif defect == "duplicate":
+        report["inputCoverage"]["missingDailyDates"] = ["2026-07-20", "2026-07-20"]
+    elif defect == "outside":
+        report["inputCoverage"]["missingDailyDates"] = ["2026-07-19", "2026-07-21"]
+    elif defect == "undisclosed":
+        report["lead"]["summary"] = "本周资讯汇总。"
+    elif defect == "future_authorization":
+        report["inputCoverage"]["authorizedAt"] = "2026-07-24T17:00:00+08:00"
+    else:
+        report["gate"]["validatedAt"] = "2026-07-24T15:59:59+08:00"
+    with pytest.raises(ValidationError):
+        validate_report(report)
+
+
 def test_weekly_report_cannot_pass_before_friday_cutoff() -> None:
     report = _weekly_draft()
     report["gate"] = {

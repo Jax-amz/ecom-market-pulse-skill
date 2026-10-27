@@ -86,6 +86,32 @@ def test_passed_gate_cannot_bypass_title_policy() -> None:
         )
 
 
+def _empty_daily_report(title: str = "周五截止补采完成，本期暂无合格新增资讯") -> dict[str, object]:
+    report = _daily_report(title)
+    report["sections"] = [{"items": []}]
+    report["stats"] = {"included": 0, "uniqueEvents": 0}
+    report["sourceDirectory"] = [{"articleCount": 0}]
+    return report
+
+
+def test_accepts_explicit_zero_event_title_with_consistent_counts() -> None:
+    validate_report_editorial_title(_empty_daily_report())
+
+
+@pytest.mark.parametrize("inconsistent_field", ["included", "uniqueEvents", "sourceDirectory"])
+def test_rejects_zero_event_title_with_nonzero_counts(inconsistent_field: str) -> None:
+    report = _empty_daily_report()
+    if inconsistent_field == "sourceDirectory":
+        report["sourceDirectory"] = [{"articleCount": 1}]
+    else:
+        report["stats"][inconsistent_field] = 1
+    assert report_editorial_title_issues(report)
+
+
+def test_empty_report_cannot_claim_a_news_event() -> None:
+    assert report_editorial_title_issues(_empty_daily_report(VALID_TITLE))
+
+
 def test_export_rechecks_recent_manifest_titles(tmp_path) -> None:
     manifest_path = tmp_path / "exports" / "manifest.json"
     manifest_path.parent.mkdir(parents=True)

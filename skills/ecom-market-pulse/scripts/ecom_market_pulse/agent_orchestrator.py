@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .analysis_contract import AgentArticleAnalysis
+from .normalization import normalize_article_main_text
 
 
 ARTICLE_ANALYSIS_INSTRUCTION = """仅依据文章正文输出一个 JSON 对象。不得编造事实。
@@ -23,7 +24,7 @@ def build_agent_task(article: Mapping[str, Any]) -> dict[str, Any]:
             "sourceUrl": article["canonical_url"],
             "publishedAt": article.get("published_at"),
             "language": article.get("language"),
-            "text": article["extracted_text"],
+            "text": normalize_article_main_text(article["extracted_text"], article["canonical_url"]),
         },
     }
 

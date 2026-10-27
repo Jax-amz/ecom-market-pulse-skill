@@ -18,6 +18,8 @@ from uuid import uuid4
 
 import duckdb
 
+from .normalization import content_sha256, normalize_article_main_text
+
 
 JsonValue = Any
 Record = dict[str, Any]
@@ -53,6 +55,8 @@ _SENSITIVE_KEY_PARTS = (
 _ENVIRONMENT_KEYS = {"env", "environ", "environment", "environment_variables", "env_variables"}
 _BEARER_PATTERN = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]+")
 _SECRET_TOKEN_PATTERN = re.compile(r"\bsk-[a-zA-Z0-9_-]{8,}\b")
+# 运行库的 CHECK 枚举保持不变；网页专用实现保留在 config_json.discovery.type。
+_ADAPTER_STORAGE_TYPES = {"amz123-kx": "html"}
 
 
 class DatabaseError(RuntimeError):
@@ -349,8 +353,10 @@ class Database:
     # ------------------------------------------------------------------
 
     def upsert_source(self, source: Mapping[str, JsonValue]) -> str:
-        """新增或更新信源配置，不覆盖未显式提交的采集断点。"""
+        """保存信源；旧库用兼容类型，配置快照保留准确适配器，不触发结构迁移。"""
         source_id = _required(source, "source_id")
+        adapter_type = _required(source, "adapter_type")
+        storage_type = _ADAPTER_STORAGE_TYPES.get(str(adapter_type), adapter_type)
         checkpoint_supplied = "checkpoint_json" in source
         with self.transaction():
             self._connection.execute(
@@ -377,7 +383,7 @@ class Database:
                     source_id,
                     _required(source, "name"),
                     _required(source, "source_class"),
-                    _required(source, "adapter_type"),
+                    storage_type,
                     _required(source, "base_url"),
                     _json_dumps(_redact(_required(source, "config_json"))),
                     _json_dumps(_redact(source.get("checkpoint_json"))) if checkpoint_supplied else None,
@@ -522,6 +528,32 @@ class Database:
             "SELECT * FROM articles WHERE canonical_url = ? AND content_sha256 = ?",
             [canonical_url, content_sha256],
         )
+
+    def get_article_version_by_main_text(
+        self,
+        canonical_url: str,
+        extracted_text: str,
+        *,
+        before: datetime | None = None,
+    ) -> Record | None:
+        """只读匹配主文，兼容旧版本含推荐尾栏的哈希；before 用于排除当前快照。"""
+        main_text = normalize_article_main_text(extracted_text, canonical_url)
+        if not main_text:
+            return None
+        exact = self.get_article_version(canonical_url, content_sha256(main_text))
+        if exact is not None and (before is None or exact["created_at"] < before):
+            return exact
+        sql = """SELECT article_id, canonical_url, extracted_text, content_sha256, created_at
+                 FROM articles WHERE canonical_url = ?"""
+        parameters: list[Any] = [canonical_url]
+        if before is not None:
+            sql += " AND created_at < ?"
+            parameters.append(before)
+        sql += " ORDER BY created_at DESC, article_id"
+        for version in self._fetchall(sql, parameters):
+            if normalize_article_main_text(version["extracted_text"], canonical_url) == main_text:
+                return version
+        return None
 
     def list_articles_for_analysis(self, *, include_non_representative: bool = False) -> list[Record]:
         sql = "SELECT * FROM articles"

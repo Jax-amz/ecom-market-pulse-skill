@@ -12,6 +12,8 @@
 
 日报、周报和月报都必须有十个固定分类区块（空分类保留空数组）、关键日期、关门验证和 build 追溯信息。日报统计发现、抓取、独立事件、分析和纳入数量；周报额外保存周期、主题、重复信号、重要变更与下周观察；月报额外保存平台矩阵、成本风险、流量转化、机会、趋势证据和下月日历。
 
+日报 `stats.uniqueEvents` 只统计完成相关性、时效与证据审核后，经 `same-event` 归并的合格独立事件；日报展示全部合格代表文章，因此该值与 `stats.included` 及 `sections` 代表文章数量一致。已排除的旧闻、无关内容、证据不足内容和主文未变的正文版本均不计入。`discovered`、`fetched` 与 `analyzed` 保留实际执行数量，不能拿它们覆盖独立事件数。`lead.summary` 最多200个字符，超长时必须重写后再构建，禁止静默截断；关门时还须检查摘要句子完整。
+
 周报周期是固定的五个工作日合同：
 
 - `date` 与 `period.startDate` 必须是同一个周一。
@@ -21,6 +23,13 @@
 - `period.isoWeek` 必须由周一计算，且只用于 `weekly/YYYY-Www.json` 文件名。
 - 通过关门验证的周报必须满足 `stats.dailyReports = 5`。
 - `build.dataCutoffAt` 必须等于 `windowEnd`，且 `generatedAt`、`gate.validatedAt` 都不得早于截止点。
+
+用户在当前对话明确要求按已有日报继续发布时，允许单次部分输入例外。周报必须增加
+`inputCoverage`，其 `mode` 为 `user-authorized-partial`，记录 `includedDailyDates`、
+`missingDailyDates`、授权原文 `authorization` 和生成前的 `authorizedAt`。
+两个日期数组必须互不重复、升序且恰好覆盖本周五个工作日；`stats.dailyReports`
+等于实际已纳入日报数，`lead.summary` 必须披露 `N/5` 及每个缺失日期。
+未记录明确授权的报告仍执行五份日报硬性要求；此例外不放宽其他周期与关门约束。
 
 周报还必须区分候选事件集与重点展示集。五份日报 articleId 回查事实层并完成跨日
 `same-event` 归并后得到候选事件集，`stats.uniqueEvents` 记录其数量；`sections`
@@ -48,6 +57,7 @@
 月报不得只基于周报再次提炼。截止点前可以生成 `pending` 草稿用于预检，但到达 16:00 后必须基于截止补采结果重新生成，才能批准 `passed` 和导出。
 
 日报 `lead.title` 还必须通过 [editorial-title-policy.md](editorial-title-policy.md)：使用一至两个可回溯到入选文章的具体事件，长度 18～24 个字符，并与最近七期归档标题保持足够差异。占位报告名、分类堆砌和公文式风险提示不得通过关门或导出。
+完整采集且无合格新增的日报可按该规范的零事件规则发布；统计、分类区块及信源计数须如实为零，不能代替缺失或采集失败的日报。
 
 每份报告还必须提供 `sourceDirectory`。它仅来自运行配置中所有 `enabled: true` 的信源，按配置顺序输出 `id`、`name`、`sourceClass`、`homepageUrl` 与 `articleCount`。`articleCount` 统计最终进入 `sections[].items[]` 的代表文章，因此 `0` 表示本期没有被纳入报告，不表示该信源失效或没有抓到内容。报告构建时，任何入选文章若没有对应的已启用信源配置，必须失败，不能用不完整目录继续导出。
 

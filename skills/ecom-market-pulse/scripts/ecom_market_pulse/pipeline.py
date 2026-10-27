@@ -29,10 +29,12 @@ class RunSummary:
         return {"runId": self.run_id, "runType": self.run_type, "stats": self.stats, "warnings": self.warnings, "exportedFiles": self.exported_files, "gateStatus": self.gate_status}
 
 
-def collect(*, workspace: Path, config: PulseConfig, since: datetime) -> RunSummary:
+def collect(*, workspace: Path, config: PulseConfig, since: datetime, initialize_database: bool = True) -> RunSummary:
     """发现、抓取、正文提取和精确去重；不调用任何模型 API。"""
 
-    with Database(workspace.expanduser().resolve()) as database:
+    workspace = workspace.expanduser().resolve()
+    database = Database(workspace) if initialize_database else Database(workspace, initialize=False)
+    with database:
         run_id = database.create_run("collect", redacted_snapshot(config), window_start=since, window_end=datetime.now(ZoneInfo("UTC")))
         summary = RunSummary(run_id, "collect", {"discovered": 0, "fetched": 0, "fetchFailed": 0, "extracted": 0, "duplicates": 0, "extractFailed": 0})
         try:
@@ -59,7 +61,7 @@ def collect(*, workspace: Path, config: PulseConfig, since: datetime) -> RunSumm
                         summary.stats["extractFailed"] += 1
                         continue
                     text_hash = content_sha256(extracted.extracted_text)
-                    if database.get_article_version(extracted.canonical_url, text_hash):
+                    if database.get_article_version_by_main_text(extracted.canonical_url, extracted.extracted_text):
                         summary.stats["duplicates"] += 1
                         continue
                     database.record_article({"fetch_id": fetch_id, "canonical_url": extracted.canonical_url, "title": extracted.title, "original_title": extracted.original_title, "author": extracted.author, "published_at": extracted.published_at, "language": extracted.language, "extracted_text": extracted.extracted_text, "extracted_html": extracted.extracted_html, "extractor_version": extracted.extractor_version, "content_sha256": text_hash, "event_key": build_event_key(extracted.title, extracted.published_at), "is_representative": True})
